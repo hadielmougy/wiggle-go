@@ -1,0 +1,8 @@
+# Test binaries and coverage
+*.test
+*.out
+coverage.*
+
+# Editor / OS
+.DS_Store
+CLAUDE.MD
