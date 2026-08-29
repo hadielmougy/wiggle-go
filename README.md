@@ -33,24 +33,33 @@ func main() {
 	defer client.Close()
 	ctx := context.Background()
 
-	// Define a workflow. The context is a map[string]any; a step returns the whole context and the
-	// engine merges only what changed. Whole numbers arrive as float64 (Go's JSON convention).
-	wf := wiggle.Define("order").
-		Step("validate", func(o wiggle.Context) (wiggle.Context, error) {
-			o["status"] = "VALIDATED"
-			return o, nil
-		}).
-		Gate("in-stock", func(o wiggle.Context) (bool, error) { return o["quantity"].(float64) > 0, nil }).
-		Step("charge", func(o wiggle.Context) (wiggle.Context, error) {
-			o["paymentRef"] = fmt.Sprintf("auth-%v", o["orderId"])
-			return o, nil
-		}, wiggle.WithQueue("payments"), wiggle.WithRetry(wiggle.RetryExponential(5, 100*time.Millisecond))).
-		Effect("notify", func(o wiggle.Context) error { fmt.Println("shipped", o["orderId"]); return nil }).
-		Build()
+	// The topology is declarative data -- a Graph that mirrors the YAML/graph schema. Compile it to a
+	// *Blueprint you register. Handlers are bound separately, by name (below).
+	wf := wiggle.Graph{
+		Name: "order",
+		Steps: []wiggle.Node{
+			wiggle.Step{Name: "validate"},
+			wiggle.Gate{Name: "in-stock"},
+			wiggle.Step{Name: "charge", Queue: "payments", Retry: wiggle.RetryExponential(5, 100*time.Millisecond)},
+			wiggle.Effect{Name: "notify"},
+		},
+	}.MustCompile()
 
 	client.Register(ctx, wf)
 
-	worker := wiggle.NewWorker(client, "worker-1").Register(wf)
+	// A worker implements steps by name. The context is a map[string]any; a task returns the whole
+	// context and the engine merges only what changed. Whole numbers arrive as float64 (Go's JSON convention).
+	worker := wiggle.NewWorker(client, "worker-1").
+		Handle("order", "validate", func(o wiggle.Context) (wiggle.Context, error) {
+			o["status"] = "VALIDATED"
+			return o, nil
+		}).
+		HandleGate("order", "in-stock", func(o wiggle.Context) (bool, error) { return o["quantity"].(float64) > 0, nil }).
+		Handle("order", "charge", func(o wiggle.Context) (wiggle.Context, error) {
+			o["paymentRef"] = fmt.Sprintf("auth-%v", o["orderId"])
+			return o, nil
+		}).
+		HandleEffect("order", "notify", func(o wiggle.Context) error { fmt.Println("shipped", o["orderId"]); return nil })
 	worker.Start(ctx)
 	defer worker.Stop()
 
@@ -66,27 +75,49 @@ Run the bundled example against a server on `:8080`:
 WIGGLE_URL=localhost:8080 go run ./examples/order
 ```
 
-## The DSL
+## Topology
 
-`Define(name)` starts a builder; every operator returns the builder so calls chain, and `Build()`
-produces a `*Blueprint` you register and serve.
+A workflow's shape is declarative Go data — a `Graph` whose `Steps` is a slice of `Node` values that
+mirror the YAML/graph schema. `Compile()` turns it into a `*Blueprint` you register (it validates the
+shape and returns an error); `MustCompile()` panics instead, for a literal known-good at build time.
+Handlers are **not** part of the topology — a worker binds them separately, by name (see below).
 
-| Operator | Meaning |
+```go
+wf := wiggle.Graph{
+	Name: "order",
+	// DefaultQueue: "order",   // queue for steps that don't set their own (defaults to the name)
+	Steps: []wiggle.Node{
+		wiggle.Step{Name: "validate"},
+		wiggle.Gate{Name: "in-stock"},
+		wiggle.Fork{Branches: []wiggle.Branch{
+			{Name: "payment",  Steps: []wiggle.Node{wiggle.Step{Name: "charge", Queue: "payments"}}},
+			{Name: "shipping", Steps: []wiggle.Node{wiggle.Step{Name: "reserve"}, wiggle.Step{Name: "label"}}},
+		}},
+		wiggle.Choose{Cases: []wiggle.Case{
+			{When: "vip", Then: []wiggle.Node{wiggle.Step{Name: "concierge"}}},
+			{Then: []wiggle.Node{wiggle.Step{Name: "thanks"}}}, // no When -> the otherwise case (must be last)
+		}},
+		wiggle.Effect{Name: "notify"},
+	},
+}.MustCompile()
+```
+
+| Node | Meaning |
 |---|---|
-| `Step(name, fn, opts…)` / `Then(...)` | run `fn(ctx) (ctx, error)` on a worker; only changed keys are merged back |
-| `Effect(name, fn, opts…)` | run `fn(ctx) error` for a side effect; context unchanged |
-| `Gate(name, test, opts…)` | continue only while `test(ctx) (bool, error)` holds; false ends the instance as `gated:<name>` |
-| `Fork(BranchOf(name, body), …)` | run branches in parallel, then wait for all (join) |
-| `ForkEach(name, itemsKey, itemKey, body)` | runtime fan-out: one branch per element of the list at `itemsKey` |
-| `Choose(When(name, guard, body), …, Otherwise(name, body))` | exclusive choice: the first matching guard's branch runs |
-| `DoWhile(name, cond, body)` | run `body`, then repeat while `cond(ctx)` holds (body runs at least once) |
-| `SubWorkflow(name, child)` | run another workflow as a child; its result merges back |
-| `Sleep(name, d)` | server-side timer; no worker is held |
-| `AwaitSignal(name, timeout, escalation)` | wait for a signal (`Client.Signal`); on timeout, fail — or run `escalation` and rejoin |
-| `DefaultQueue(q)` | queue for steps that don't set their own (defaults to the workflow name) |
-| `Build()` | produce a `*Blueprint` |
+| `Step{Name, Queue, Retry}` | a task run on a worker (`Handle`); only changed context keys are merged back |
+| `Effect{Name, Queue, Retry}` | a side-effect step (`HandleEffect`); context unchanged |
+| `Gate{Name, Queue, Retry}` | a predicate (`HandleGate`); false ends the instance as `gated:<name>` |
+| `Fork{Branches}` | run branches in parallel, then wait for all (join) |
+| `ForkEach{Name, Over, As, Body}` | runtime fan-out: one branch per element of the list at `Over` (bound to `As`) |
+| `Choose{Cases}` | exclusive choice: the first `Case` whose `When` guard holds runs; a `Case` with no `When` is the otherwise (last) |
+| `DoWhile{While, Body}` | run `Body`, then repeat while the `While` predicate holds (body runs at least once) |
+| `SubWorkflow{Name, Workflow}` | run another workflow as a child; its result merges back |
+| `Sleep{Name, For}` | server-side timer (`For` is a `time.Duration`); no worker is held |
+| `AwaitSignal{Name, Timeout, Escalation}` | wait for a signal (`Client.Signal`); on `Timeout`, fail — or run `Escalation` and rejoin |
 
-Per-step options: `WithQueue(q)`, `WithRetry(r)` (`RetryExponential/RetryFixed/RetryNone/RetryForever`).
+Per-step: `Queue` (defaults to `DefaultQueue`, else the workflow name) and `Retry`
+(`RetryExponential/RetryFixed/RetryNone/RetryForever`). `Branch{Name, Steps}` and `Case{When, Then}`
+are themselves declarative slices of `Node`, so branches and bodies nest arbitrarily.
 
 ## Name-only binding (interop)
 
@@ -106,6 +137,37 @@ worker.Start(ctx) // reconciles against the registered graph, discovering the qu
 the worker reconciles: it verifies each step exists and is the right kind (a typo fails fast with the
 available step names) and discovers which queue each step polls. Pass `AwaitRegistration(d)` to ride
 out a registration race.
+
+### A struct of handlers: `RegisterHandlers`
+
+Instead of one `Handle(...)` call per step, hand the worker a struct whose methods *are* the steps —
+matched by name, with the **Go signature picking the kind**:
+
+```go
+type OrderHandlers struct{}
+
+func (OrderHandlers) Validate(o wiggle.Context) (wiggle.Context, error) { // -> a task
+	o["status"] = "VALIDATED"
+	return o, nil
+}
+func (OrderHandlers) InStock(o wiggle.Context) (bool, error) {           // -> a gate; matches step "in-stock"
+	return o["quantity"].(float64) > 0, nil
+}
+func (OrderHandlers) Notify(o wiggle.Context) error {                     // -> a side effect
+	fmt.Println("shipped", o["orderId"]); return nil
+}
+
+worker := wiggle.NewWorker(client, "orders").RegisterHandlers("order", OrderHandlers{})
+worker.Start(ctx)
+```
+
+Each exported method shaped like a handler — `func(Context)(Context,error)` (task),
+`func(Context)(bool,error)` (gate), or `func(Context)error` (effect) — is matched to a step of the
+named workflow **by case-insensitive name** (`InStock` ↔ `in-stock`) on `Start`. The graph confirms
+the exact name and the kind, so a signature that contradicts it (a task method for a gate step) fails
+fast. Two method names that collide under case-folding panic at `RegisterHandlers`; methods of any
+other shape are ignored, so helpers can live on the struct. Pass a pointer (`&OrderHandlers{}`) if your
+methods use pointer receivers.
 
 ## Client API
 
@@ -127,7 +189,7 @@ Health(ctx)
 ## Testing
 
 ```bash
-go test ./...                                   # offline: DSL graph shapes + conversions
+go test ./...                                   # offline: topology graph shapes + conversions
 WIGGLE_TEST_URL=localhost:8080 go test -run Integration ./...   # end-to-end against a server
 ```
 

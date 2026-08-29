@@ -5,10 +5,6 @@ import (
 	"testing"
 )
 
-func id(c Context) (Context, error) { return c, nil }
-func yes(c Context) (bool, error)   { return true, nil }
-func noop(c Context) error          { return nil }
-
 func nodeByName(def map[string]any, name string) map[string]any {
 	for _, n := range def["nodes"].([]any) {
 		node := n.(map[string]any)
@@ -30,12 +26,15 @@ func countKind(def map[string]any, kind string) int {
 }
 
 func TestLinearGraph(t *testing.T) {
-	bp := Define("order").
-		Step("validate", id).
-		Gate("in-stock", yes).
-		Step("charge", id, WithQueue("payments")).
-		Effect("notify", noop).
-		Build()
+	bp := Graph{
+		Name: "order",
+		Steps: []Node{
+			Step{Name: "validate"},
+			Gate{Name: "in-stock"},
+			Step{Name: "charge", Queue: "payments"},
+			Effect{Name: "notify"},
+		},
+	}.MustCompile()
 	def := bp.Definition
 	if got := nodeByName(def, "validate")["kind"]; got != "TASK" {
 		t.Fatalf("validate kind = %v", got)
@@ -58,14 +57,10 @@ func TestLinearGraph(t *testing.T) {
 	if nodeByName(def, "validate")["next"] != nodeByName(def, "in-stock")["id"] {
 		t.Fatalf("validate does not chain to in-stock")
 	}
-	// handlers keyed by activity
-	if _, ok := bp.handlers["order#validate"]; !ok {
-		t.Fatalf("missing handler for order#validate")
-	}
 }
 
 func TestGateFalseEndsGated(t *testing.T) {
-	bp := Define("wf").Step("a", id).Gate("g", yes).Step("b", id).Build()
+	bp := Graph{Name: "wf", Steps: []Node{Step{Name: "a"}, Gate{Name: "g"}, Step{Name: "b"}}}.MustCompile()
 	g := nodeByName(bp.Definition, "g")
 	end := findByID(bp.Definition, g["altNext"].(string))
 	if end["kind"] != "END" || end["reason"] != "gated:g" {
@@ -74,13 +69,16 @@ func TestGateFalseEndsGated(t *testing.T) {
 }
 
 func TestForkJoin(t *testing.T) {
-	bp := Define("order").
-		Fork(
-			BranchOf("payment", func(w *Workflow) { w.Step("charge", id) }),
-			BranchOf("shipping", func(w *Workflow) { w.Step("reserve", id).Step("label", id) }),
-		).
-		Effect("notify", noop).
-		Build()
+	bp := Graph{
+		Name: "order",
+		Steps: []Node{
+			Fork{Branches: []Branch{
+				{Name: "payment", Steps: []Node{Step{Name: "charge"}}},
+				{Name: "shipping", Steps: []Node{Step{Name: "reserve"}, Step{Name: "label"}}},
+			}},
+			Effect{Name: "notify"},
+		},
+	}.MustCompile()
 	def := bp.Definition
 	if countKind(def, "FORK") != 1 || countKind(def, "JOIN") != 1 {
 		t.Fatalf("want one FORK and one JOIN")
@@ -100,10 +98,13 @@ func TestForkJoin(t *testing.T) {
 }
 
 func TestDoWhileCycle(t *testing.T) {
-	bp := Define("wf").
-		DoWhile("has-more", yes, func(w *Workflow) { w.Step("fetch", id).Step("process", id) }).
-		Step("finalize", id).
-		Build()
+	bp := Graph{
+		Name: "wf",
+		Steps: []Node{
+			DoWhile{While: "has-more", Body: []Node{Step{Name: "fetch"}, Step{Name: "process"}}},
+			Step{Name: "finalize"},
+		},
+	}.MustCompile()
 	def := bp.Definition
 	cond := nodeByName(def, "has-more")
 	if cond["kind"] != "PREDICATE" {
@@ -118,10 +119,10 @@ func TestDoWhileCycle(t *testing.T) {
 }
 
 func TestAwaitSignalEscalation(t *testing.T) {
-	bp := Define("wf").
-		Step("submit", id).
-		AwaitSignal("approval", 0, nil).
-		Build()
+	bp := Graph{
+		Name:  "wf",
+		Steps: []Node{Step{Name: "submit"}, AwaitSignal{Name: "approval"}},
+	}.MustCompile()
 	if nodeByName(bp.Definition, "approval")["kind"] != "SIGNAL" {
 		t.Fatalf("approval is not a SIGNAL node")
 	}
@@ -129,7 +130,7 @@ func TestAwaitSignalEscalation(t *testing.T) {
 
 func TestContentVersionDeterministic(t *testing.T) {
 	build := func() int {
-		return Define("wf").Step("a", id).Gate("g", yes).Effect("n", noop).Build().Version
+		return Graph{Name: "wf", Steps: []Node{Step{Name: "a"}, Gate{Name: "g"}, Effect{Name: "n"}}}.MustCompile().Version
 	}
 	v1, v2 := build(), build()
 	if v1 != v2 || v1 <= 0 {
@@ -138,7 +139,7 @@ func TestContentVersionDeterministic(t *testing.T) {
 }
 
 func TestExplicitVersion(t *testing.T) {
-	if v := Define("wf").Version(7).Step("a", id).Build().Version; v != 7 {
+	if v := (Graph{Name: "wf", Version: 7, Steps: []Node{Step{Name: "a"}}}).MustCompile().Version; v != 7 {
 		t.Fatalf("explicit version = %d", v)
 	}
 }
@@ -156,13 +157,11 @@ func TestShallowDiff(t *testing.T) {
 	}
 }
 
-func TestDuplicateStepPanics(t *testing.T) {
-	defer func() {
-		if recover() == nil {
-			t.Fatalf("expected panic on duplicate step name")
-		}
-	}()
-	Define("wf").Step("a", id).Step("a", id).Build()
+func TestDuplicateStepErrors(t *testing.T) {
+	_, err := Graph{Name: "wf", Steps: []Node{Step{Name: "a"}, Step{Name: "a"}}}.Compile()
+	if err == nil {
+		t.Fatalf("expected an error on duplicate step name")
+	}
 }
 
 func findByID(def map[string]any, id string) map[string]any {

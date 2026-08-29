@@ -27,23 +27,17 @@ func main() {
 	defer client.Close()
 	ctx := context.Background()
 
-	wf := wiggle.Define("go-order").
-		Step("validate", func(o wiggle.Context) (wiggle.Context, error) {
-			o["status"] = "VALIDATED"
-			return o, nil
-		}).
-		Gate("in-stock", func(o wiggle.Context) (bool, error) {
-			return o["quantity"].(float64) > 0, nil
-		}).
-		Step("charge", func(o wiggle.Context) (wiggle.Context, error) {
-			o["paymentRef"] = fmt.Sprintf("auth-%v", o["orderId"])
-			return o, nil
-		}, wiggle.WithQueue("payments"), wiggle.WithRetry(wiggle.RetryExponential(5, 100*time.Millisecond))).
-		Effect("notify", func(o wiggle.Context) error {
-			fmt.Printf("   [worker] notified %v (payment %v)\n", o["orderId"], o["paymentRef"])
-			return nil
-		}).
-		Build()
+	// Topology is declarative data -- a Graph that mirrors the YAML/graph schema. Handlers are bound
+	// separately, by name, on the worker (below).
+	wf := wiggle.Graph{
+		Name: "go-order",
+		Steps: []wiggle.Node{
+			wiggle.Step{Name: "validate"},
+			wiggle.Gate{Name: "in-stock"},
+			wiggle.Step{Name: "charge", Queue: "payments", Retry: wiggle.RetryExponential(5, 100*time.Millisecond)},
+			wiggle.Effect{Name: "notify"},
+		},
+	}.MustCompile()
 
 	version, err := client.Register(ctx, wf)
 	if err != nil {
@@ -51,7 +45,22 @@ func main() {
 	}
 	fmt.Printf("registered %s v%d\n", wf.Name, version)
 
-	worker := wiggle.NewWorker(client, "go-worker-1").Register(wf)
+	worker := wiggle.NewWorker(client, "go-worker-1").
+		Handle("go-order", "validate", func(o wiggle.Context) (wiggle.Context, error) {
+			o["status"] = "VALIDATED"
+			return o, nil
+		}).
+		HandleGate("go-order", "in-stock", func(o wiggle.Context) (bool, error) {
+			return o["quantity"].(float64) > 0, nil
+		}).
+		Handle("go-order", "charge", func(o wiggle.Context) (wiggle.Context, error) {
+			o["paymentRef"] = fmt.Sprintf("auth-%v", o["orderId"])
+			return o, nil
+		}).
+		HandleEffect("go-order", "notify", func(o wiggle.Context) error {
+			fmt.Printf("   [worker] notified %v (payment %v)\n", o["orderId"], o["paymentRef"])
+			return nil
+		})
 	if err := worker.Start(ctx); err != nil {
 		log.Fatal(err)
 	}

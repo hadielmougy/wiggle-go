@@ -43,19 +43,18 @@ func AwaitRegistration(d time.Duration) WorkerOption {
 	return func(w *Worker) { w.awaitRegistration = d }
 }
 
-// RegisterOnStart controls whether registered blueprints are (re)registered on Start (default true).
-func RegisterOnStart(b bool) WorkerOption { return func(w *Worker) { w.registerOnStart = b } }
-
 // Worker pulls tasks it has capacity for, runs the matching handler, and reports the result. It holds
-// no durable state: a crash loses at most the in-flight step, which the server re-leases.
+// no durable state: a crash loses at most the in-flight step, which the server re-leases. A worker
+// implements steps by name (Handle); topology is registered separately (Client.Register of a compiled
+// Graph, or the wiggle CLI).
 type Worker struct {
 	client *Client
 	id     string
 
-	handlers   map[string]activityHandler
-	queues     map[string]bool
-	claims     []claim
-	blueprints []*Blueprint
+	handlers    map[string]activityHandler
+	queues      map[string]bool
+	claims      []claim
+	handlerSets []handlerSet
 
 	concurrency       int
 	leaseMillis       int64
@@ -63,7 +62,6 @@ type Worker struct {
 	idleBackoff       time.Duration
 	errorBackoff      time.Duration
 	awaitRegistration time.Duration
-	registerOnStart   bool
 	explicitQueues    map[string]bool
 
 	running atomic.Bool
@@ -76,14 +74,13 @@ type Worker struct {
 func NewWorker(client *Client, id string, opts ...WorkerOption) *Worker {
 	w := &Worker{
 		client: client, id: id,
-		handlers:        map[string]activityHandler{},
-		queues:          map[string]bool{},
-		concurrency:     runtime.NumCPU(),
-		leaseMillis:     30_000,
-		waitMillis:      10_000,
-		idleBackoff:     200 * time.Millisecond,
-		errorBackoff:    2 * time.Second,
-		registerOnStart: true,
+		handlers:     map[string]activityHandler{},
+		queues:       map[string]bool{},
+		concurrency:  runtime.NumCPU(),
+		leaseMillis:  30_000,
+		waitMillis:   10_000,
+		idleBackoff:  200 * time.Millisecond,
+		errorBackoff: 2 * time.Second,
 	}
 	for _, o := range opts {
 		o(w)
@@ -91,20 +88,8 @@ func NewWorker(client *Client, id string, opts ...WorkerOption) *Worker {
 	return w
 }
 
-// Register adds a blueprint's handlers (and its queues) to this worker's dispatch table.
-func (w *Worker) Register(bp *Blueprint) *Worker {
-	for activity, h := range bp.handlers {
-		w.handlers[activity] = h
-	}
-	for _, q := range bp.Queues {
-		w.queues[q] = true
-	}
-	w.blueprints = append(w.blueprints, bp)
-	return w
-}
-
-// Handle binds a task handler to one step of an already-registered workflow, by name -- no topology
-// re-declaration. On Start the worker reconciles the binding against the server graph.
+// Handle binds a task handler to one step of an already-registered workflow, by name. On Start the
+// worker reconciles the binding against the server graph.
 func (w *Worker) Handle(workflow, step string, fn Activity) *Worker {
 	return w.bind(workflow, step, "TASK", taskHandler(fn))
 }
@@ -146,20 +131,12 @@ func (w *Worker) servedQueues() []string {
 	return out
 }
 
-// Start registers blueprints (unless disabled), reconciles Handle-bound claims, and begins polling.
+// Start reconciles the Handle-bound claims against the registered graph, then begins polling.
 func (w *Worker) Start(ctx context.Context) error {
 	if !w.running.CompareAndSwap(false, true) {
 		return nil
 	}
-	if w.registerOnStart {
-		for _, bp := range w.blueprints {
-			if _, err := w.client.Register(ctx, bp); err != nil {
-				w.running.Store(false)
-				return fmt.Errorf("register %s: %w", bp.Name, err)
-			}
-		}
-	}
-	if len(w.claims) > 0 {
+	if len(w.claims) > 0 || len(w.handlerSets) > 0 {
 		if err := w.reconcile(ctx); err != nil {
 			w.running.Store(false)
 			return err
@@ -222,6 +199,11 @@ func (w *Worker) reconcile(ctx context.Context) error {
 				queue = wf
 			}
 			w.queues[queue] = true
+		}
+	}
+	for _, set := range w.handlerSets {
+		if err := w.matchHandlerSet(ctx, set); err != nil {
+			return err
 		}
 	}
 	return nil

@@ -34,19 +34,32 @@ func dialTest(t *testing.T) (*wiggle.Client, context.Context) {
 	return c, context.Background()
 }
 
+// order is the declarative topology (no handlers). Each test binds handlers by name (bindOrder).
 func order(name string) *wiggle.Blueprint {
-	return wiggle.Define(name).
-		Step("validate", func(o wiggle.Context) (wiggle.Context, error) {
+	return wiggle.Graph{
+		Name: name,
+		Steps: []wiggle.Node{
+			wiggle.Step{Name: "validate"},
+			wiggle.Gate{Name: "in-stock"},
+			wiggle.Step{Name: "charge", Queue: name + "-payments"}, // unique per workflow so tests don't share a queue
+			wiggle.Effect{Name: "done"},
+		},
+	}.MustCompile()
+}
+
+// bindOrder attaches the order handlers to a worker by (workflow, step) name.
+func bindOrder(w *wiggle.Worker, name string) *wiggle.Worker {
+	return w.
+		Handle(name, "validate", func(o wiggle.Context) (wiggle.Context, error) {
 			o["status"] = "VALIDATED"
 			return o, nil
 		}).
-		Gate("in-stock", func(o wiggle.Context) (bool, error) { return o["qty"].(float64) > 0, nil }).
-		Step("charge", func(o wiggle.Context) (wiggle.Context, error) {
+		HandleGate(name, "in-stock", func(o wiggle.Context) (bool, error) { return o["qty"].(float64) > 0, nil }).
+		Handle(name, "charge", func(o wiggle.Context) (wiggle.Context, error) {
 			o["paymentRef"] = fmt.Sprintf("auth-%v", o["orderId"])
 			return o, nil
-		}, wiggle.WithQueue(name+"-payments")). // unique per workflow so tests don't share a queue
-		Effect("done", func(o wiggle.Context) error { return nil }).
-		Build()
+		}).
+		HandleEffect(name, "done", func(o wiggle.Context) error { return nil })
 }
 
 func TestIntegrationFullRun(t *testing.T) {
@@ -55,7 +68,7 @@ func TestIntegrationFullRun(t *testing.T) {
 	if _, err := client.Register(ctx, wf); err != nil {
 		t.Fatalf("register: %v", err)
 	}
-	w := wiggle.NewWorker(client, "it-full").Register(wf)
+	w := bindOrder(wiggle.NewWorker(client, "it-full"), wf.Name)
 	if err := w.Start(ctx); err != nil {
 		t.Fatalf("start worker: %v", err)
 	}
@@ -85,7 +98,7 @@ func TestIntegrationNameOnlyBinding(t *testing.T) {
 	if _, err := client.Register(ctx, order(name)); err != nil { // register topology only
 		t.Fatalf("register: %v", err)
 	}
-	w := wiggle.NewWorker(client, "it-bind", wiggle.RegisterOnStart(false)).
+	w := wiggle.NewWorker(client, "it-bind").
 		Handle(name, "validate", func(o wiggle.Context) (wiggle.Context, error) {
 			o["status"] = "VALIDATED"
 			return o, nil
@@ -121,7 +134,7 @@ func TestIntegrationReconcileRejectsUnknownStep(t *testing.T) {
 	if _, err := client.Register(ctx, order(name)); err != nil {
 		t.Fatalf("register: %v", err)
 	}
-	w := wiggle.NewWorker(client, "it-bad", wiggle.RegisterOnStart(false)).
+	w := wiggle.NewWorker(client, "it-bad").
 		Handle(name, "charrge", func(o wiggle.Context) (wiggle.Context, error) { return o, nil }) // typo
 	if err := w.Start(ctx); err == nil {
 		w.Stop()
