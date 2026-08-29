@@ -15,6 +15,6 @@ export PATH="$PATH:$(go env GOPATH)/bin"
 protoc -I proto \
 	--go_out=. --go_opt=module=github.com/hadielmougy/wiggle-go \
 	--go-grpc_out=. --go-grpc_opt=module=github.com/hadielmougy/wiggle-go \
-	proto/wiggle.proto
+	proto/wiggle.proto proto/coordinator.proto
 
 echo "regenerated stubs in internal/pb"

@@ -1,8 +1,9 @@
 # Wiggle — Go client
 
-A Go client and worker for the [Wiggle](https://github.com/hadielmougy/wiggle) workflow engine. It
-speaks the same gRPC control plane as the Java and Python clients, so a Go worker **interoperates**
-with them on one server — dispatch is by activity name (`"<workflow>#<step>"`), not by language.
+A Go client and worker for [Wiggle](https://github.com/hadielmougy/wiggle), the durable state-machine
+platform. It speaks the same gRPC control plane as the Java and Python clients, so a Go worker
+**interoperates** with them on one server — dispatch is by activity name (`"<workflow>#<step>"`), not
+by language. In a coordinator-sharded deployment the Go client resolves the owning cell per instance.
 
 ```bash
 go get github.com/hadielmougy/wiggle-go
