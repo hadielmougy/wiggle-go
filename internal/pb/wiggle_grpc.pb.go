@@ -19,24 +19,24 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	WiggleControlPlane_HealthCheck_FullMethodName      = "/dev.wiggle.proto.WiggleControlPlane/HealthCheck"
-	WiggleControlPlane_GetCluster_FullMethodName       = "/dev.wiggle.proto.WiggleControlPlane/GetCluster"
-	WiggleControlPlane_ListWorkflows_FullMethodName    = "/dev.wiggle.proto.WiggleControlPlane/ListWorkflows"
-	WiggleControlPlane_RegisterWorkflow_FullMethodName = "/dev.wiggle.proto.WiggleControlPlane/RegisterWorkflow"
-	WiggleControlPlane_GetWorkflow_FullMethodName      = "/dev.wiggle.proto.WiggleControlPlane/GetWorkflow"
-	WiggleControlPlane_StartInstance_FullMethodName    = "/dev.wiggle.proto.WiggleControlPlane/StartInstance"
-	WiggleControlPlane_ListInstances_FullMethodName    = "/dev.wiggle.proto.WiggleControlPlane/ListInstances"
-	WiggleControlPlane_GetInstance_FullMethodName      = "/dev.wiggle.proto.WiggleControlPlane/GetInstance"
-	WiggleControlPlane_CancelInstance_FullMethodName   = "/dev.wiggle.proto.WiggleControlPlane/CancelInstance"
-	WiggleControlPlane_SignalInstance_FullMethodName   = "/dev.wiggle.proto.WiggleControlPlane/SignalInstance"
-	WiggleControlPlane_CreateSchedule_FullMethodName   = "/dev.wiggle.proto.WiggleControlPlane/CreateSchedule"
-	WiggleControlPlane_ListSchedules_FullMethodName    = "/dev.wiggle.proto.WiggleControlPlane/ListSchedules"
-	WiggleControlPlane_DeleteSchedule_FullMethodName   = "/dev.wiggle.proto.WiggleControlPlane/DeleteSchedule"
-	WiggleControlPlane_PollTasks_FullMethodName        = "/dev.wiggle.proto.WiggleControlPlane/PollTasks"
-	WiggleControlPlane_CompleteTask_FullMethodName     = "/dev.wiggle.proto.WiggleControlPlane/CompleteTask"
-	WiggleControlPlane_FailTask_FullMethodName         = "/dev.wiggle.proto.WiggleControlPlane/FailTask"
-	WiggleControlPlane_HeartbeatTask_FullMethodName    = "/dev.wiggle.proto.WiggleControlPlane/HeartbeatTask"
-	WiggleControlPlane_AdvanceRun_FullMethodName       = "/dev.wiggle.proto.WiggleControlPlane/AdvanceRun"
+	WiggleControlPlane_HealthCheck_FullMethodName      = "/com.wiggle.proto.WiggleControlPlane/HealthCheck"
+	WiggleControlPlane_GetCluster_FullMethodName       = "/com.wiggle.proto.WiggleControlPlane/GetCluster"
+	WiggleControlPlane_ListWorkflows_FullMethodName    = "/com.wiggle.proto.WiggleControlPlane/ListWorkflows"
+	WiggleControlPlane_RegisterWorkflow_FullMethodName = "/com.wiggle.proto.WiggleControlPlane/RegisterWorkflow"
+	WiggleControlPlane_GetWorkflow_FullMethodName      = "/com.wiggle.proto.WiggleControlPlane/GetWorkflow"
+	WiggleControlPlane_StartInstance_FullMethodName    = "/com.wiggle.proto.WiggleControlPlane/StartInstance"
+	WiggleControlPlane_ListInstances_FullMethodName    = "/com.wiggle.proto.WiggleControlPlane/ListInstances"
+	WiggleControlPlane_GetInstance_FullMethodName      = "/com.wiggle.proto.WiggleControlPlane/GetInstance"
+	WiggleControlPlane_CancelInstance_FullMethodName   = "/com.wiggle.proto.WiggleControlPlane/CancelInstance"
+	WiggleControlPlane_SignalInstance_FullMethodName   = "/com.wiggle.proto.WiggleControlPlane/SignalInstance"
+	WiggleControlPlane_CreateSchedule_FullMethodName   = "/com.wiggle.proto.WiggleControlPlane/CreateSchedule"
+	WiggleControlPlane_ListSchedules_FullMethodName    = "/com.wiggle.proto.WiggleControlPlane/ListSchedules"
+	WiggleControlPlane_DeleteSchedule_FullMethodName   = "/com.wiggle.proto.WiggleControlPlane/DeleteSchedule"
+	WiggleControlPlane_PollTasks_FullMethodName        = "/com.wiggle.proto.WiggleControlPlane/PollTasks"
+	WiggleControlPlane_CompleteTask_FullMethodName     = "/com.wiggle.proto.WiggleControlPlane/CompleteTask"
+	WiggleControlPlane_FailTask_FullMethodName         = "/com.wiggle.proto.WiggleControlPlane/FailTask"
+	WiggleControlPlane_HeartbeatTask_FullMethodName    = "/com.wiggle.proto.WiggleControlPlane/HeartbeatTask"
+	WiggleControlPlane_AdvanceRun_FullMethodName       = "/com.wiggle.proto.WiggleControlPlane/AdvanceRun"
 )
 
 // WiggleControlPlaneClient is the client API for WiggleControlPlane service.
@@ -698,7 +698,7 @@ func _WiggleControlPlane_AdvanceRun_Handler(srv interface{}, ctx context.Context
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var WiggleControlPlane_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "dev.wiggle.proto.WiggleControlPlane",
+	ServiceName: "com.wiggle.proto.WiggleControlPlane",
 	HandlerType: (*WiggleControlPlaneServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{

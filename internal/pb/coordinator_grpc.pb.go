@@ -19,17 +19,17 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	CellCoordinator_FetchConfig_FullMethodName        = "/dev.wiggle.proto.CellCoordinator/FetchConfig"
-	CellCoordinator_Register_FullMethodName           = "/dev.wiggle.proto.CellCoordinator/Register"
-	CellCoordinator_Heartbeat_FullMethodName          = "/dev.wiggle.proto.CellCoordinator/Heartbeat"
-	CellCoordinator_Deregister_FullMethodName         = "/dev.wiggle.proto.CellCoordinator/Deregister"
-	CellCoordinator_Resolve_FullMethodName            = "/dev.wiggle.proto.CellCoordinator/Resolve"
-	CellCoordinator_ActiveCells_FullMethodName        = "/dev.wiggle.proto.CellCoordinator/ActiveCells"
-	CellCoordinator_OpenEpoch_FullMethodName          = "/dev.wiggle.proto.CellCoordinator/OpenEpoch"
-	CellCoordinator_SetRing_FullMethodName            = "/dev.wiggle.proto.CellCoordinator/SetRing"
-	CellCoordinator_RegisterWorkflow_FullMethodName   = "/dev.wiggle.proto.CellCoordinator/RegisterWorkflow"
-	CellCoordinator_DeregisterWorkflow_FullMethodName = "/dev.wiggle.proto.CellCoordinator/DeregisterWorkflow"
-	CellCoordinator_ListWorkflows_FullMethodName      = "/dev.wiggle.proto.CellCoordinator/ListWorkflows"
+	CellCoordinator_FetchConfig_FullMethodName        = "/com.wiggle.proto.CellCoordinator/FetchConfig"
+	CellCoordinator_Register_FullMethodName           = "/com.wiggle.proto.CellCoordinator/Register"
+	CellCoordinator_Heartbeat_FullMethodName          = "/com.wiggle.proto.CellCoordinator/Heartbeat"
+	CellCoordinator_Deregister_FullMethodName         = "/com.wiggle.proto.CellCoordinator/Deregister"
+	CellCoordinator_Resolve_FullMethodName            = "/com.wiggle.proto.CellCoordinator/Resolve"
+	CellCoordinator_ActiveCells_FullMethodName        = "/com.wiggle.proto.CellCoordinator/ActiveCells"
+	CellCoordinator_OpenEpoch_FullMethodName          = "/com.wiggle.proto.CellCoordinator/OpenEpoch"
+	CellCoordinator_SetRing_FullMethodName            = "/com.wiggle.proto.CellCoordinator/SetRing"
+	CellCoordinator_RegisterWorkflow_FullMethodName   = "/com.wiggle.proto.CellCoordinator/RegisterWorkflow"
+	CellCoordinator_DeregisterWorkflow_FullMethodName = "/com.wiggle.proto.CellCoordinator/DeregisterWorkflow"
+	CellCoordinator_ListWorkflows_FullMethodName      = "/com.wiggle.proto.CellCoordinator/ListWorkflows"
 )
 
 // CellCoordinatorClient is the client API for CellCoordinator service.
@@ -462,7 +462,7 @@ func _CellCoordinator_ListWorkflows_Handler(srv interface{}, ctx context.Context
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var CellCoordinator_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "dev.wiggle.proto.CellCoordinator",
+	ServiceName: "com.wiggle.proto.CellCoordinator",
 	HandlerType: (*CellCoordinatorServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{

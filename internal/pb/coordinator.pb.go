@@ -469,7 +469,7 @@ func (x *RingSlot) GetRegion() string {
 type EpochRing struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Ring          []*RingSlot            `protobuf:"bytes,1,rep,name=ring,proto3" json:"ring,omitempty"`
-	Status        EpochStatus            `protobuf:"varint,2,opt,name=status,proto3,enum=dev.wiggle.proto.EpochStatus" json:"status,omitempty"`
+	Status        EpochStatus            `protobuf:"varint,2,opt,name=status,proto3,enum=com.wiggle.proto.EpochStatus" json:"status,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1015,7 +1015,7 @@ type RegisterResponse struct {
 	state                    protoimpl.MessageState `protogen:"open.v1"`
 	NodeId                   string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
 	HeartbeatIntervalSeconds uint32                 `protobuf:"varint,2,opt,name=heartbeat_interval_seconds,json=heartbeatIntervalSeconds,proto3" json:"heartbeat_interval_seconds,omitempty"`
-	Directives               []Directive            `protobuf:"varint,3,rep,packed,name=directives,proto3,enum=dev.wiggle.proto.Directive" json:"directives,omitempty"`
+	Directives               []Directive            `protobuf:"varint,3,rep,packed,name=directives,proto3,enum=com.wiggle.proto.Directive" json:"directives,omitempty"`
 	Epoch                    uint64                 `protobuf:"varint,4,opt,name=epoch,proto3" json:"epoch,omitempty"`          // initial placement: the epoch this node mints into
 	Shards                   []uint32               `protobuf:"varint,5,rep,packed,name=shards,proto3" json:"shards,omitempty"` // initial placement: the shards this node's cell owns
 	unknownFields            protoimpl.UnknownFields
@@ -1211,7 +1211,7 @@ type CoordinatorHeartbeatResponse struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	Ok               bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
 	ConfigGeneration uint64                 `protobuf:"varint,2,opt,name=config_generation,json=configGeneration,proto3" json:"config_generation,omitempty"` // newer => node re-fetches
-	Directives       []Directive            `protobuf:"varint,3,rep,packed,name=directives,proto3,enum=dev.wiggle.proto.Directive" json:"directives,omitempty"`
+	Directives       []Directive            `protobuf:"varint,3,rep,packed,name=directives,proto3,enum=com.wiggle.proto.Directive" json:"directives,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -2105,7 +2105,7 @@ var File_coordinator_proto protoreflect.FileDescriptor
 
 const file_coordinator_proto_rawDesc = "" +
 	"\n" +
-	"\x11coordinator.proto\x12\x10dev.wiggle.proto\x1a\fwiggle.proto\"=\n" +
+	"\x11coordinator.proto\x12\x10com.wiggle.proto\x1a\fwiggle.proto\"=\n" +
 	"\x03Tls\x12\x1f\n" +
 	"\vserver_name\x18\x01 \x01(\tR\n" +
 	"serverName\x12\x15\n" +
@@ -2113,7 +2113,7 @@ const file_coordinator_proto_rawDesc = "" +
 	"\bEndpoint\x12\x16\n" +
 	"\x06target\x18\x01 \x01(\tR\x06target\x12\x16\n" +
 	"\x06region\x18\x02 \x01(\tR\x06region\x12'\n" +
-	"\x03tls\x18\x03 \x01(\v2\x15.dev.wiggle.proto.TlsR\x03tls\x12\x1c\n" +
+	"\x03tls\x18\x03 \x01(\v2\x15.com.wiggle.proto.TlsR\x03tls\x12\x1c\n" +
 	"\taddresses\x18\x04 \x03(\tR\taddresses\x12\x1f\n" +
 	"\vttl_seconds\x18\x05 \x01(\rR\n" +
 	"ttlSeconds\"\x90\x01\n" +
@@ -2129,7 +2129,7 @@ const file_coordinator_proto_rawDesc = "" +
 	"\flease_millis\x18\x02 \x01(\rH\x01R\vleaseMillis\x88\x01\x01\x124\n" +
 	"\x14long_poll_max_millis\x18\x03 \x01(\rH\x02R\x11longPollMaxMillis\x88\x01\x01\x12.\n" +
 	"\x10retention_millis\x18\x04 \x01(\x04H\x03R\x0fretentionMillis\x88\x01\x01\x127\n" +
-	"\x06memory\x18\x05 \x01(\v2\x1f.dev.wiggle.proto.Tuning.MemoryR\x06memory\x1a~\n" +
+	"\x06memory\x18\x05 \x01(\v2\x1f.com.wiggle.proto.Tuning.MemoryR\x06memory\x1a~\n" +
 	"\x06Memory\x12.\n" +
 	"\x10shedding_enabled\x18\x01 \x01(\bH\x00R\x0fsheddingEnabled\x88\x01\x01\x12!\n" +
 	"\tthreshold\x18\x02 \x01(\x01H\x01R\tthreshold\x88\x01\x01B\x13\n" +
@@ -2145,16 +2145,16 @@ const file_coordinator_proto_rawDesc = "" +
 	"\acell_id\x18\x02 \x01(\tR\x06cellId\x12\x16\n" +
 	"\x06region\x18\x03 \x01(\tR\x06region\"r\n" +
 	"\tEpochRing\x12.\n" +
-	"\x04ring\x18\x01 \x03(\v2\x1a.dev.wiggle.proto.RingSlotR\x04ring\x125\n" +
-	"\x06status\x18\x02 \x01(\x0e2\x1d.dev.wiggle.proto.EpochStatusR\x06status\"\xfd\x01\n" +
+	"\x04ring\x18\x01 \x03(\v2\x1a.com.wiggle.proto.RingSlotR\x04ring\x125\n" +
+	"\x06status\x18\x02 \x01(\x0e2\x1d.com.wiggle.proto.EpochStatusR\x06status\"\xfd\x01\n" +
 	"\x06Policy\x12\x1c\n" +
 	"\tnamespace\x18\x01 \x01(\tR\tnamespace\x12#\n" +
 	"\rcurrent_epoch\x18\x02 \x01(\x04R\fcurrentEpoch\x12<\n" +
-	"\x06epochs\x18\x03 \x03(\v2$.dev.wiggle.proto.Policy.EpochsEntryR\x06epochs\x12\x1a\n" +
+	"\x06epochs\x18\x03 \x03(\v2$.com.wiggle.proto.Policy.EpochsEntryR\x06epochs\x12\x1a\n" +
 	"\brevision\x18\x04 \x01(\x04R\brevision\x1aV\n" +
 	"\vEpochsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x04R\x03key\x121\n" +
-	"\x05value\x18\x02 \x01(\v2\x1b.dev.wiggle.proto.EpochRingR\x05value:\x028\x01\"\x9d\x01\n" +
+	"\x05value\x18\x02 \x01(\v2\x1b.com.wiggle.proto.EpochRingR\x05value:\x028\x01\"\x9d\x01\n" +
 	"\bNodeInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12%\n" +
 	"\x0eengine_version\x18\x02 \x01(\tR\rengineVersion\x12%\n" +
@@ -2163,7 +2163,7 @@ const file_coordinator_proto_rawDesc = "" +
 	"\acell_id\x18\x05 \x01(\tR\x06cellId\"b\n" +
 	"\x12FetchConfigRequest\x12\x1c\n" +
 	"\tnamespace\x18\x01 \x01(\tR\tnamespace\x12.\n" +
-	"\x04node\x18\x02 \x01(\v2\x1a.dev.wiggle.proto.NodeInfoR\x04node\"X\n" +
+	"\x04node\x18\x02 \x01(\v2\x1a.com.wiggle.proto.NodeInfoR\x04node\"X\n" +
 	"\bExpected\x12%\n" +
 	"\x0eengine_version\x18\x01 \x01(\tR\rengineVersion\x12%\n" +
 	"\x0eschema_version\x18\x02 \x01(\rR\rschemaVersion\"\xbc\x02\n" +
@@ -2173,9 +2173,9 @@ const file_coordinator_proto_rawDesc = "" +
 	"\n" +
 	"generation\x18\x02 \x01(\x04R\n" +
 	"generation\x126\n" +
-	"\bexpected\x18\x03 \x01(\v2\x1a.dev.wiggle.proto.ExpectedR\bexpected\x127\n" +
-	"\astorage\x18\x04 \x01(\v2\x1d.dev.wiggle.proto.StorageSpecR\astorage\x120\n" +
-	"\x06tuning\x18\x05 \x01(\v2\x18.dev.wiggle.proto.TuningR\x06tuning\x12\x1f\n" +
+	"\bexpected\x18\x03 \x01(\v2\x1a.com.wiggle.proto.ExpectedR\bexpected\x127\n" +
+	"\astorage\x18\x04 \x01(\v2\x1d.com.wiggle.proto.StorageSpecR\astorage\x120\n" +
+	"\x06tuning\x18\x05 \x01(\v2\x18.com.wiggle.proto.TuningR\x06tuning\x12\x1f\n" +
 	"\vttl_seconds\x18\x06 \x01(\rR\n" +
 	"ttlSeconds\x12\x14\n" +
 	"\x05epoch\x18\a \x01(\x04R\x05epoch\x12\x16\n" +
@@ -2190,32 +2190,32 @@ const file_coordinator_proto_rawDesc = "" +
 	"\acell_id\x18\x06 \x01(\tR\x06cellId\"\x92\x01\n" +
 	"\x0fRegisterRequest\x12\x1c\n" +
 	"\tnamespace\x18\x01 \x01(\tR\tnamespace\x124\n" +
-	"\x04node\x18\x02 \x01(\v2 .dev.wiggle.proto.RegisteredNodeR\x04node\x12+\n" +
+	"\x04node\x18\x02 \x01(\v2 .com.wiggle.proto.RegisteredNodeR\x04node\x12+\n" +
 	"\x11config_generation\x18\x03 \x01(\x04R\x10configGeneration\"\xd4\x01\n" +
 	"\x10RegisterResponse\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12<\n" +
 	"\x1aheartbeat_interval_seconds\x18\x02 \x01(\rR\x18heartbeatIntervalSeconds\x12;\n" +
 	"\n" +
-	"directives\x18\x03 \x03(\x0e2\x1b.dev.wiggle.proto.DirectiveR\n" +
+	"directives\x18\x03 \x03(\x0e2\x1b.com.wiggle.proto.DirectiveR\n" +
 	"directives\x12\x14\n" +
 	"\x05epoch\x18\x04 \x01(\x04R\x05epoch\x12\x16\n" +
 	"\x06shards\x18\x05 \x03(\rR\x06shards\"\xcc\x01\n" +
 	"\x06Health\x12\x1b\n" +
 	"\tin_flight\x18\x01 \x01(\rR\binFlight\x12\x16\n" +
 	"\x06leader\x18\x02 \x01(\bR\x06leader\x12M\n" +
-	"\rlive_by_epoch\x18\x03 \x03(\v2).dev.wiggle.proto.Health.LiveByEpochEntryR\vliveByEpoch\x1a>\n" +
+	"\rlive_by_epoch\x18\x03 \x03(\v2).com.wiggle.proto.Health.LiveByEpochEntryR\vliveByEpoch\x1a>\n" +
 	"\x10LiveByEpochEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\x95\x01\n" +
 	"\x1bCoordinatorHeartbeatRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12+\n" +
 	"\x11config_generation\x18\x02 \x01(\x04R\x10configGeneration\x120\n" +
-	"\x06health\x18\x03 \x01(\v2\x18.dev.wiggle.proto.HealthR\x06health\"\x98\x01\n" +
+	"\x06health\x18\x03 \x01(\v2\x18.com.wiggle.proto.HealthR\x06health\"\x98\x01\n" +
 	"\x1cCoordinatorHeartbeatResponse\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12+\n" +
 	"\x11config_generation\x18\x02 \x01(\x04R\x10configGeneration\x12;\n" +
 	"\n" +
-	"directives\x18\x03 \x03(\x0e2\x1b.dev.wiggle.proto.DirectiveR\n" +
+	"directives\x18\x03 \x03(\x0e2\x1b.com.wiggle.proto.DirectiveR\n" +
 	"directives\",\n" +
 	"\x11DeregisterRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\"~\n" +
@@ -2228,7 +2228,7 @@ const file_coordinator_proto_rawDesc = "" +
 	"\x0fResolveResponse\x12\x1c\n" +
 	"\tnamespace\x18\x01 \x01(\tR\tnamespace\x12\x14\n" +
 	"\x05epoch\x18\x02 \x01(\x04R\x05epoch\x126\n" +
-	"\bendpoint\x18\x03 \x01(\v2\x1a.dev.wiggle.proto.EndpointR\bendpoint\x12\x1f\n" +
+	"\bendpoint\x18\x03 \x01(\v2\x1a.com.wiggle.proto.EndpointR\bendpoint\x12\x1f\n" +
 	"\vttl_seconds\x18\x04 \x01(\rR\n" +
 	"ttlSeconds\"W\n" +
 	"\x12ActiveCellsRequest\x12\x1c\n" +
@@ -2238,16 +2238,16 @@ const file_coordinator_proto_rawDesc = "" +
 	"\n" +
 	"generation\x18\x01 \x01(\x04R\n" +
 	"generation\x120\n" +
-	"\x05cells\x18\x02 \x03(\v2\x1a.dev.wiggle.proto.EndpointR\x05cells\x12\x1f\n" +
+	"\x05cells\x18\x02 \x03(\v2\x1a.com.wiggle.proto.EndpointR\x05cells\x12\x1f\n" +
 	"\vttl_seconds\x18\x03 \x01(\rR\n" +
 	"ttlSeconds\"`\n" +
 	"\x10OpenEpochRequest\x12\x1c\n" +
 	"\tnamespace\x18\x01 \x01(\tR\tnamespace\x12.\n" +
-	"\x04ring\x18\x02 \x03(\v2\x1a.dev.wiggle.proto.RingSlotR\x04ring\"t\n" +
+	"\x04ring\x18\x02 \x03(\v2\x1a.com.wiggle.proto.RingSlotR\x04ring\"t\n" +
 	"\x0eSetRingRequest\x12\x1c\n" +
 	"\tnamespace\x18\x01 \x01(\tR\tnamespace\x12\x14\n" +
 	"\x05epoch\x18\x02 \x01(\x04R\x05epoch\x12.\n" +
-	"\x04ring\x18\x03 \x03(\v2\x1a.dev.wiggle.proto.RingSlotR\x04ring\"k\n" +
+	"\x04ring\x18\x03 \x03(\v2\x1a.com.wiggle.proto.RingSlotR\x04ring\"k\n" +
 	"\x17RegisterWorkflowRequest\x12\x1c\n" +
 	"\tnamespace\x18\x01 \x01(\tR\tnamespace\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1e\n" +
@@ -2265,7 +2265,7 @@ const file_coordinator_proto_rawDesc = "" +
 	"\x14ListWorkflowsRequest\x12\x1c\n" +
 	"\tnamespace\x18\x01 \x01(\tR\tnamespace\"Z\n" +
 	"\x15ListWorkflowsResponse\x12A\n" +
-	"\tworkflows\x18\x01 \x03(\v2#.dev.wiggle.proto.AllocatedWorkflowR\tworkflows\"f\n" +
+	"\tworkflows\x18\x01 \x03(\v2#.com.wiggle.proto.AllocatedWorkflowR\tworkflows\"f\n" +
 	"\x11AllocatedWorkflow\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\rR\aversion\x12#\n" +
@@ -2280,19 +2280,19 @@ const file_coordinator_proto_rawDesc = "" +
 	"\vRECONFIGURE\x10\x01\x12\t\n" +
 	"\x05DRAIN\x10\x022\xeb\a\n" +
 	"\x0fCellCoordinator\x12Q\n" +
-	"\vFetchConfig\x12$.dev.wiggle.proto.FetchConfigRequest\x1a\x1c.dev.wiggle.proto.NodeConfig\x12Q\n" +
-	"\bRegister\x12!.dev.wiggle.proto.RegisterRequest\x1a\".dev.wiggle.proto.RegisterResponse\x12j\n" +
-	"\tHeartbeat\x12-.dev.wiggle.proto.CoordinatorHeartbeatRequest\x1a..dev.wiggle.proto.CoordinatorHeartbeatResponse\x12J\n" +
+	"\vFetchConfig\x12$.com.wiggle.proto.FetchConfigRequest\x1a\x1c.com.wiggle.proto.NodeConfig\x12Q\n" +
+	"\bRegister\x12!.com.wiggle.proto.RegisterRequest\x1a\".com.wiggle.proto.RegisterResponse\x12j\n" +
+	"\tHeartbeat\x12-.com.wiggle.proto.CoordinatorHeartbeatRequest\x1a..com.wiggle.proto.CoordinatorHeartbeatResponse\x12J\n" +
 	"\n" +
-	"Deregister\x12#.dev.wiggle.proto.DeregisterRequest\x1a\x17.dev.wiggle.proto.Empty\x12N\n" +
-	"\aResolve\x12 .dev.wiggle.proto.ResolveRequest\x1a!.dev.wiggle.proto.ResolveResponse\x12Z\n" +
-	"\vActiveCells\x12$.dev.wiggle.proto.ActiveCellsRequest\x1a%.dev.wiggle.proto.ActiveCellsResponse\x12I\n" +
-	"\tOpenEpoch\x12\".dev.wiggle.proto.OpenEpochRequest\x1a\x18.dev.wiggle.proto.Policy\x12E\n" +
-	"\aSetRing\x12 .dev.wiggle.proto.SetRingRequest\x1a\x18.dev.wiggle.proto.Policy\x12i\n" +
-	"\x10RegisterWorkflow\x12).dev.wiggle.proto.RegisterWorkflowRequest\x1a*.dev.wiggle.proto.RegisterWorkflowResponse\x12o\n" +
-	"\x12DeregisterWorkflow\x12+.dev.wiggle.proto.DeregisterWorkflowRequest\x1a,.dev.wiggle.proto.DeregisterWorkflowResponse\x12`\n" +
-	"\rListWorkflows\x12&.dev.wiggle.proto.ListWorkflowsRequest\x1a'.dev.wiggle.proto.ListWorkflowsResponseBE\n" +
-	"\x10dev.wiggle.protoP\x01Z/github.com/hadielmougy/wiggle-go/internal/pb;pbb\x06proto3"
+	"Deregister\x12#.com.wiggle.proto.DeregisterRequest\x1a\x17.com.wiggle.proto.Empty\x12N\n" +
+	"\aResolve\x12 .com.wiggle.proto.ResolveRequest\x1a!.com.wiggle.proto.ResolveResponse\x12Z\n" +
+	"\vActiveCells\x12$.com.wiggle.proto.ActiveCellsRequest\x1a%.com.wiggle.proto.ActiveCellsResponse\x12I\n" +
+	"\tOpenEpoch\x12\".com.wiggle.proto.OpenEpochRequest\x1a\x18.com.wiggle.proto.Policy\x12E\n" +
+	"\aSetRing\x12 .com.wiggle.proto.SetRingRequest\x1a\x18.com.wiggle.proto.Policy\x12i\n" +
+	"\x10RegisterWorkflow\x12).com.wiggle.proto.RegisterWorkflowRequest\x1a*.com.wiggle.proto.RegisterWorkflowResponse\x12o\n" +
+	"\x12DeregisterWorkflow\x12+.com.wiggle.proto.DeregisterWorkflowRequest\x1a,.com.wiggle.proto.DeregisterWorkflowResponse\x12`\n" +
+	"\rListWorkflows\x12&.com.wiggle.proto.ListWorkflowsRequest\x1a'.com.wiggle.proto.ListWorkflowsResponseBE\n" +
+	"\x10com.wiggle.protoP\x01Z/github.com/hadielmougy/wiggle-go/internal/pb;pbb\x06proto3"
 
 var (
 	file_coordinator_proto_rawDescOnce sync.Once
@@ -2309,87 +2309,87 @@ func file_coordinator_proto_rawDescGZIP() []byte {
 var file_coordinator_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
 var file_coordinator_proto_msgTypes = make([]protoimpl.MessageInfo, 34)
 var file_coordinator_proto_goTypes = []any{
-	(EpochStatus)(0),                     // 0: dev.wiggle.proto.EpochStatus
-	(Directive)(0),                       // 1: dev.wiggle.proto.Directive
-	(*Tls)(nil),                          // 2: dev.wiggle.proto.Tls
-	(*Endpoint)(nil),                     // 3: dev.wiggle.proto.Endpoint
-	(*StorageSpec)(nil),                  // 4: dev.wiggle.proto.StorageSpec
-	(*Tuning)(nil),                       // 5: dev.wiggle.proto.Tuning
-	(*RingSlot)(nil),                     // 6: dev.wiggle.proto.RingSlot
-	(*EpochRing)(nil),                    // 7: dev.wiggle.proto.EpochRing
-	(*Policy)(nil),                       // 8: dev.wiggle.proto.Policy
-	(*NodeInfo)(nil),                     // 9: dev.wiggle.proto.NodeInfo
-	(*FetchConfigRequest)(nil),           // 10: dev.wiggle.proto.FetchConfigRequest
-	(*Expected)(nil),                     // 11: dev.wiggle.proto.Expected
-	(*NodeConfig)(nil),                   // 12: dev.wiggle.proto.NodeConfig
-	(*RegisteredNode)(nil),               // 13: dev.wiggle.proto.RegisteredNode
-	(*RegisterRequest)(nil),              // 14: dev.wiggle.proto.RegisterRequest
-	(*RegisterResponse)(nil),             // 15: dev.wiggle.proto.RegisterResponse
-	(*Health)(nil),                       // 16: dev.wiggle.proto.Health
-	(*CoordinatorHeartbeatRequest)(nil),  // 17: dev.wiggle.proto.CoordinatorHeartbeatRequest
-	(*CoordinatorHeartbeatResponse)(nil), // 18: dev.wiggle.proto.CoordinatorHeartbeatResponse
-	(*DeregisterRequest)(nil),            // 19: dev.wiggle.proto.DeregisterRequest
-	(*ResolveRequest)(nil),               // 20: dev.wiggle.proto.ResolveRequest
-	(*ResolveResponse)(nil),              // 21: dev.wiggle.proto.ResolveResponse
-	(*ActiveCellsRequest)(nil),           // 22: dev.wiggle.proto.ActiveCellsRequest
-	(*ActiveCellsResponse)(nil),          // 23: dev.wiggle.proto.ActiveCellsResponse
-	(*OpenEpochRequest)(nil),             // 24: dev.wiggle.proto.OpenEpochRequest
-	(*SetRingRequest)(nil),               // 25: dev.wiggle.proto.SetRingRequest
-	(*RegisterWorkflowRequest)(nil),      // 26: dev.wiggle.proto.RegisterWorkflowRequest
-	(*RegisterWorkflowResponse)(nil),     // 27: dev.wiggle.proto.RegisterWorkflowResponse
-	(*DeregisterWorkflowRequest)(nil),    // 28: dev.wiggle.proto.DeregisterWorkflowRequest
-	(*DeregisterWorkflowResponse)(nil),   // 29: dev.wiggle.proto.DeregisterWorkflowResponse
-	(*ListWorkflowsRequest)(nil),         // 30: dev.wiggle.proto.ListWorkflowsRequest
-	(*ListWorkflowsResponse)(nil),        // 31: dev.wiggle.proto.ListWorkflowsResponse
-	(*AllocatedWorkflow)(nil),            // 32: dev.wiggle.proto.AllocatedWorkflow
-	(*Tuning_Memory)(nil),                // 33: dev.wiggle.proto.Tuning.Memory
-	nil,                                  // 34: dev.wiggle.proto.Policy.EpochsEntry
-	nil,                                  // 35: dev.wiggle.proto.Health.LiveByEpochEntry
-	(*Empty)(nil),                        // 36: dev.wiggle.proto.Empty
+	(EpochStatus)(0),                     // 0: com.wiggle.proto.EpochStatus
+	(Directive)(0),                       // 1: com.wiggle.proto.Directive
+	(*Tls)(nil),                          // 2: com.wiggle.proto.Tls
+	(*Endpoint)(nil),                     // 3: com.wiggle.proto.Endpoint
+	(*StorageSpec)(nil),                  // 4: com.wiggle.proto.StorageSpec
+	(*Tuning)(nil),                       // 5: com.wiggle.proto.Tuning
+	(*RingSlot)(nil),                     // 6: com.wiggle.proto.RingSlot
+	(*EpochRing)(nil),                    // 7: com.wiggle.proto.EpochRing
+	(*Policy)(nil),                       // 8: com.wiggle.proto.Policy
+	(*NodeInfo)(nil),                     // 9: com.wiggle.proto.NodeInfo
+	(*FetchConfigRequest)(nil),           // 10: com.wiggle.proto.FetchConfigRequest
+	(*Expected)(nil),                     // 11: com.wiggle.proto.Expected
+	(*NodeConfig)(nil),                   // 12: com.wiggle.proto.NodeConfig
+	(*RegisteredNode)(nil),               // 13: com.wiggle.proto.RegisteredNode
+	(*RegisterRequest)(nil),              // 14: com.wiggle.proto.RegisterRequest
+	(*RegisterResponse)(nil),             // 15: com.wiggle.proto.RegisterResponse
+	(*Health)(nil),                       // 16: com.wiggle.proto.Health
+	(*CoordinatorHeartbeatRequest)(nil),  // 17: com.wiggle.proto.CoordinatorHeartbeatRequest
+	(*CoordinatorHeartbeatResponse)(nil), // 18: com.wiggle.proto.CoordinatorHeartbeatResponse
+	(*DeregisterRequest)(nil),            // 19: com.wiggle.proto.DeregisterRequest
+	(*ResolveRequest)(nil),               // 20: com.wiggle.proto.ResolveRequest
+	(*ResolveResponse)(nil),              // 21: com.wiggle.proto.ResolveResponse
+	(*ActiveCellsRequest)(nil),           // 22: com.wiggle.proto.ActiveCellsRequest
+	(*ActiveCellsResponse)(nil),          // 23: com.wiggle.proto.ActiveCellsResponse
+	(*OpenEpochRequest)(nil),             // 24: com.wiggle.proto.OpenEpochRequest
+	(*SetRingRequest)(nil),               // 25: com.wiggle.proto.SetRingRequest
+	(*RegisterWorkflowRequest)(nil),      // 26: com.wiggle.proto.RegisterWorkflowRequest
+	(*RegisterWorkflowResponse)(nil),     // 27: com.wiggle.proto.RegisterWorkflowResponse
+	(*DeregisterWorkflowRequest)(nil),    // 28: com.wiggle.proto.DeregisterWorkflowRequest
+	(*DeregisterWorkflowResponse)(nil),   // 29: com.wiggle.proto.DeregisterWorkflowResponse
+	(*ListWorkflowsRequest)(nil),         // 30: com.wiggle.proto.ListWorkflowsRequest
+	(*ListWorkflowsResponse)(nil),        // 31: com.wiggle.proto.ListWorkflowsResponse
+	(*AllocatedWorkflow)(nil),            // 32: com.wiggle.proto.AllocatedWorkflow
+	(*Tuning_Memory)(nil),                // 33: com.wiggle.proto.Tuning.Memory
+	nil,                                  // 34: com.wiggle.proto.Policy.EpochsEntry
+	nil,                                  // 35: com.wiggle.proto.Health.LiveByEpochEntry
+	(*Empty)(nil),                        // 36: com.wiggle.proto.Empty
 }
 var file_coordinator_proto_depIdxs = []int32{
-	2,  // 0: dev.wiggle.proto.Endpoint.tls:type_name -> dev.wiggle.proto.Tls
-	33, // 1: dev.wiggle.proto.Tuning.memory:type_name -> dev.wiggle.proto.Tuning.Memory
-	6,  // 2: dev.wiggle.proto.EpochRing.ring:type_name -> dev.wiggle.proto.RingSlot
-	0,  // 3: dev.wiggle.proto.EpochRing.status:type_name -> dev.wiggle.proto.EpochStatus
-	34, // 4: dev.wiggle.proto.Policy.epochs:type_name -> dev.wiggle.proto.Policy.EpochsEntry
-	9,  // 5: dev.wiggle.proto.FetchConfigRequest.node:type_name -> dev.wiggle.proto.NodeInfo
-	11, // 6: dev.wiggle.proto.NodeConfig.expected:type_name -> dev.wiggle.proto.Expected
-	4,  // 7: dev.wiggle.proto.NodeConfig.storage:type_name -> dev.wiggle.proto.StorageSpec
-	5,  // 8: dev.wiggle.proto.NodeConfig.tuning:type_name -> dev.wiggle.proto.Tuning
-	13, // 9: dev.wiggle.proto.RegisterRequest.node:type_name -> dev.wiggle.proto.RegisteredNode
-	1,  // 10: dev.wiggle.proto.RegisterResponse.directives:type_name -> dev.wiggle.proto.Directive
-	35, // 11: dev.wiggle.proto.Health.live_by_epoch:type_name -> dev.wiggle.proto.Health.LiveByEpochEntry
-	16, // 12: dev.wiggle.proto.CoordinatorHeartbeatRequest.health:type_name -> dev.wiggle.proto.Health
-	1,  // 13: dev.wiggle.proto.CoordinatorHeartbeatResponse.directives:type_name -> dev.wiggle.proto.Directive
-	3,  // 14: dev.wiggle.proto.ResolveResponse.endpoint:type_name -> dev.wiggle.proto.Endpoint
-	3,  // 15: dev.wiggle.proto.ActiveCellsResponse.cells:type_name -> dev.wiggle.proto.Endpoint
-	6,  // 16: dev.wiggle.proto.OpenEpochRequest.ring:type_name -> dev.wiggle.proto.RingSlot
-	6,  // 17: dev.wiggle.proto.SetRingRequest.ring:type_name -> dev.wiggle.proto.RingSlot
-	32, // 18: dev.wiggle.proto.ListWorkflowsResponse.workflows:type_name -> dev.wiggle.proto.AllocatedWorkflow
-	7,  // 19: dev.wiggle.proto.Policy.EpochsEntry.value:type_name -> dev.wiggle.proto.EpochRing
-	10, // 20: dev.wiggle.proto.CellCoordinator.FetchConfig:input_type -> dev.wiggle.proto.FetchConfigRequest
-	14, // 21: dev.wiggle.proto.CellCoordinator.Register:input_type -> dev.wiggle.proto.RegisterRequest
-	17, // 22: dev.wiggle.proto.CellCoordinator.Heartbeat:input_type -> dev.wiggle.proto.CoordinatorHeartbeatRequest
-	19, // 23: dev.wiggle.proto.CellCoordinator.Deregister:input_type -> dev.wiggle.proto.DeregisterRequest
-	20, // 24: dev.wiggle.proto.CellCoordinator.Resolve:input_type -> dev.wiggle.proto.ResolveRequest
-	22, // 25: dev.wiggle.proto.CellCoordinator.ActiveCells:input_type -> dev.wiggle.proto.ActiveCellsRequest
-	24, // 26: dev.wiggle.proto.CellCoordinator.OpenEpoch:input_type -> dev.wiggle.proto.OpenEpochRequest
-	25, // 27: dev.wiggle.proto.CellCoordinator.SetRing:input_type -> dev.wiggle.proto.SetRingRequest
-	26, // 28: dev.wiggle.proto.CellCoordinator.RegisterWorkflow:input_type -> dev.wiggle.proto.RegisterWorkflowRequest
-	28, // 29: dev.wiggle.proto.CellCoordinator.DeregisterWorkflow:input_type -> dev.wiggle.proto.DeregisterWorkflowRequest
-	30, // 30: dev.wiggle.proto.CellCoordinator.ListWorkflows:input_type -> dev.wiggle.proto.ListWorkflowsRequest
-	12, // 31: dev.wiggle.proto.CellCoordinator.FetchConfig:output_type -> dev.wiggle.proto.NodeConfig
-	15, // 32: dev.wiggle.proto.CellCoordinator.Register:output_type -> dev.wiggle.proto.RegisterResponse
-	18, // 33: dev.wiggle.proto.CellCoordinator.Heartbeat:output_type -> dev.wiggle.proto.CoordinatorHeartbeatResponse
-	36, // 34: dev.wiggle.proto.CellCoordinator.Deregister:output_type -> dev.wiggle.proto.Empty
-	21, // 35: dev.wiggle.proto.CellCoordinator.Resolve:output_type -> dev.wiggle.proto.ResolveResponse
-	23, // 36: dev.wiggle.proto.CellCoordinator.ActiveCells:output_type -> dev.wiggle.proto.ActiveCellsResponse
-	8,  // 37: dev.wiggle.proto.CellCoordinator.OpenEpoch:output_type -> dev.wiggle.proto.Policy
-	8,  // 38: dev.wiggle.proto.CellCoordinator.SetRing:output_type -> dev.wiggle.proto.Policy
-	27, // 39: dev.wiggle.proto.CellCoordinator.RegisterWorkflow:output_type -> dev.wiggle.proto.RegisterWorkflowResponse
-	29, // 40: dev.wiggle.proto.CellCoordinator.DeregisterWorkflow:output_type -> dev.wiggle.proto.DeregisterWorkflowResponse
-	31, // 41: dev.wiggle.proto.CellCoordinator.ListWorkflows:output_type -> dev.wiggle.proto.ListWorkflowsResponse
+	2,  // 0: com.wiggle.proto.Endpoint.tls:type_name -> com.wiggle.proto.Tls
+	33, // 1: com.wiggle.proto.Tuning.memory:type_name -> com.wiggle.proto.Tuning.Memory
+	6,  // 2: com.wiggle.proto.EpochRing.ring:type_name -> com.wiggle.proto.RingSlot
+	0,  // 3: com.wiggle.proto.EpochRing.status:type_name -> com.wiggle.proto.EpochStatus
+	34, // 4: com.wiggle.proto.Policy.epochs:type_name -> com.wiggle.proto.Policy.EpochsEntry
+	9,  // 5: com.wiggle.proto.FetchConfigRequest.node:type_name -> com.wiggle.proto.NodeInfo
+	11, // 6: com.wiggle.proto.NodeConfig.expected:type_name -> com.wiggle.proto.Expected
+	4,  // 7: com.wiggle.proto.NodeConfig.storage:type_name -> com.wiggle.proto.StorageSpec
+	5,  // 8: com.wiggle.proto.NodeConfig.tuning:type_name -> com.wiggle.proto.Tuning
+	13, // 9: com.wiggle.proto.RegisterRequest.node:type_name -> com.wiggle.proto.RegisteredNode
+	1,  // 10: com.wiggle.proto.RegisterResponse.directives:type_name -> com.wiggle.proto.Directive
+	35, // 11: com.wiggle.proto.Health.live_by_epoch:type_name -> com.wiggle.proto.Health.LiveByEpochEntry
+	16, // 12: com.wiggle.proto.CoordinatorHeartbeatRequest.health:type_name -> com.wiggle.proto.Health
+	1,  // 13: com.wiggle.proto.CoordinatorHeartbeatResponse.directives:type_name -> com.wiggle.proto.Directive
+	3,  // 14: com.wiggle.proto.ResolveResponse.endpoint:type_name -> com.wiggle.proto.Endpoint
+	3,  // 15: com.wiggle.proto.ActiveCellsResponse.cells:type_name -> com.wiggle.proto.Endpoint
+	6,  // 16: com.wiggle.proto.OpenEpochRequest.ring:type_name -> com.wiggle.proto.RingSlot
+	6,  // 17: com.wiggle.proto.SetRingRequest.ring:type_name -> com.wiggle.proto.RingSlot
+	32, // 18: com.wiggle.proto.ListWorkflowsResponse.workflows:type_name -> com.wiggle.proto.AllocatedWorkflow
+	7,  // 19: com.wiggle.proto.Policy.EpochsEntry.value:type_name -> com.wiggle.proto.EpochRing
+	10, // 20: com.wiggle.proto.CellCoordinator.FetchConfig:input_type -> com.wiggle.proto.FetchConfigRequest
+	14, // 21: com.wiggle.proto.CellCoordinator.Register:input_type -> com.wiggle.proto.RegisterRequest
+	17, // 22: com.wiggle.proto.CellCoordinator.Heartbeat:input_type -> com.wiggle.proto.CoordinatorHeartbeatRequest
+	19, // 23: com.wiggle.proto.CellCoordinator.Deregister:input_type -> com.wiggle.proto.DeregisterRequest
+	20, // 24: com.wiggle.proto.CellCoordinator.Resolve:input_type -> com.wiggle.proto.ResolveRequest
+	22, // 25: com.wiggle.proto.CellCoordinator.ActiveCells:input_type -> com.wiggle.proto.ActiveCellsRequest
+	24, // 26: com.wiggle.proto.CellCoordinator.OpenEpoch:input_type -> com.wiggle.proto.OpenEpochRequest
+	25, // 27: com.wiggle.proto.CellCoordinator.SetRing:input_type -> com.wiggle.proto.SetRingRequest
+	26, // 28: com.wiggle.proto.CellCoordinator.RegisterWorkflow:input_type -> com.wiggle.proto.RegisterWorkflowRequest
+	28, // 29: com.wiggle.proto.CellCoordinator.DeregisterWorkflow:input_type -> com.wiggle.proto.DeregisterWorkflowRequest
+	30, // 30: com.wiggle.proto.CellCoordinator.ListWorkflows:input_type -> com.wiggle.proto.ListWorkflowsRequest
+	12, // 31: com.wiggle.proto.CellCoordinator.FetchConfig:output_type -> com.wiggle.proto.NodeConfig
+	15, // 32: com.wiggle.proto.CellCoordinator.Register:output_type -> com.wiggle.proto.RegisterResponse
+	18, // 33: com.wiggle.proto.CellCoordinator.Heartbeat:output_type -> com.wiggle.proto.CoordinatorHeartbeatResponse
+	36, // 34: com.wiggle.proto.CellCoordinator.Deregister:output_type -> com.wiggle.proto.Empty
+	21, // 35: com.wiggle.proto.CellCoordinator.Resolve:output_type -> com.wiggle.proto.ResolveResponse
+	23, // 36: com.wiggle.proto.CellCoordinator.ActiveCells:output_type -> com.wiggle.proto.ActiveCellsResponse
+	8,  // 37: com.wiggle.proto.CellCoordinator.OpenEpoch:output_type -> com.wiggle.proto.Policy
+	8,  // 38: com.wiggle.proto.CellCoordinator.SetRing:output_type -> com.wiggle.proto.Policy
+	27, // 39: com.wiggle.proto.CellCoordinator.RegisterWorkflow:output_type -> com.wiggle.proto.RegisterWorkflowResponse
+	29, // 40: com.wiggle.proto.CellCoordinator.DeregisterWorkflow:output_type -> com.wiggle.proto.DeregisterWorkflowResponse
+	31, // 41: com.wiggle.proto.CellCoordinator.ListWorkflows:output_type -> com.wiggle.proto.ListWorkflowsResponse
 	31, // [31:42] is the sub-list for method output_type
 	20, // [20:31] is the sub-list for method input_type
 	20, // [20:20] is the sub-list for extension type_name

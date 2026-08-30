@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package dev.wiggle.proto;
+package com.wiggle.proto;
 
-option java_package = "dev.wiggle.proto";
+option java_package = "com.wiggle.proto";
 option java_multiple_files = true;
 option go_package = "github.com/hadielmougy/wiggle-go/internal/pb;pb";
 
