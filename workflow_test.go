@@ -170,17 +170,60 @@ func TestExplicitVersion(t *testing.T) {
 	}
 }
 
-func TestShallowDiff(t *testing.T) {
-	got := shallowDiff(Context{"a": 1.0, "b": 2.0}, Context{"a": 1.0, "b": 3.0, "c": 4.0})
-	want := Context{"b": 3.0, "c": 4.0}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("diff = %v, want %v", got, want)
+func TestTaskReturnIsSentWhole(t *testing.T) {
+	// The return REPLACES the context server-side, so the handler's whole return goes on the wire.
+	h := taskHandler(func(ctx Context) (Context, error) { return Context{"a": 1.0}, nil })
+	got, err := h(Context{"a": 1.0, "b": 2.0})
+	if err != nil {
+		t.Fatal(err)
 	}
-	// a dropped key becomes null
-	got = shallowDiff(Context{"a": 1.0, "b": 2.0}, Context{"a": 1.0})
-	if v, ok := got["b"]; !ok || v != nil {
-		t.Fatalf("dropped key not nulled: %v", got)
+	if !reflect.DeepEqual(got, Context{"a": 1.0}) {
+		t.Fatalf("expected the whole return, got %v", got)
 	}
+	// nil return = context untouched
+	h = taskHandler(func(ctx Context) (Context, error) { return nil, nil })
+	if got, _ := h(Context{"a": 1.0}); got != nil {
+		t.Fatalf("nil return must report nil, got %v", got)
+	}
+}
+
+func TestForEachEmitsCombine(t *testing.T) {
+	bp := Graph{
+		Name: "each",
+		Steps: []Node{
+			ForEach{Name: "per-item", Over: "items", As: "item",
+				Body: []Node{Step{Name: "price"}}, Combine: "collect"},
+			Step{Name: "after"},
+		},
+	}.MustCompile()
+	def := bp.Definition
+	combine := nodeByName(def, "collect")
+	if combine["kind"] != "TASK" || combine["itemsKey"] != `"per-item"` {
+		t.Fatalf("forEach combine wrong: %v", combine)
+	}
+	var join map[string]any
+	for _, n := range def["nodes"].([]any) {
+		if n.(map[string]any)["kind"] == "JOIN" {
+			join = n.(map[string]any)
+		}
+	}
+	if join["next"] != combine["id"] {
+		t.Fatalf("join must flow into the combine")
+	}
+	if combine["next"] != nodeByName(def, "after")["id"] {
+		t.Fatalf("flow continues after the combine")
+	}
+}
+
+func TestForEachRequiresCombine(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatalf("a ForEach without Combine must fail to compile")
+		}
+	}()
+	_ = Graph{Name: "bad", Steps: []Node{
+		ForEach{Name: "x", Over: "items", As: "item", Body: []Node{Step{Name: "s"}}},
+	}}.MustCompile()
 }
 
 func TestDuplicateStepErrors(t *testing.T) {

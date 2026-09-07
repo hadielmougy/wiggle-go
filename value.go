@@ -1,7 +1,6 @@
 package wiggle
 
 import (
-	"reflect"
 
 	"google.golang.org/protobuf/types/known/structpb"
 )
@@ -51,27 +50,19 @@ func asList(v any) []any {
 	return nil
 }
 
-// cloneContext makes a shallow copy of the top-level keys, so a task handler that mutates the
-// context in place can still be diffed against the value it was given.
-func cloneContext(c Context) Context {
-	out := make(Context, len(c))
-	for k, v := range c {
-		out[k] = v
-	}
-	return out
-}
-
-// taskHandler wraps a user Activity into the internal handler: snapshot the input, run the step, and
-// return only the changed top-level keys (works whether the handler mutates in place or returns a
-// new map).
+// taskHandler wraps a user Activity into the internal handler. The return is the step's COMPLETE
+// next context: it is sent whole and REPLACES the previous value server-side (no diff, no merge).
+// A nil return leaves the context untouched.
 func taskHandler(fn Activity) activityHandler {
 	return func(ctx Context) (any, error) {
-		before := cloneContext(ctx)
 		out, err := fn(ctx)
 		if err != nil {
 			return nil, err
 		}
-		return shallowDiff(before, out), nil
+		if out == nil {
+			return nil, nil
+		}
+		return out, nil
 	}
 }
 
@@ -92,20 +83,4 @@ func combineHandler(fn Activity) activityHandler {
 	}
 }
 
-// shallowDiff returns only the keys of after that differ from before; a key present in before but
-// absent from after is set to nil (a dropped key becomes null), matching the engine's merge. This is
-// what a task handler sends back so parallel branches touching different fields merge cleanly.
-func shallowDiff(before, after Context) Context {
-	diff := Context{}
-	for k, av := range after {
-		if bv, ok := before[k]; !ok || !reflect.DeepEqual(bv, av) {
-			diff[k] = av
-		}
-	}
-	for k := range before {
-		if _, ok := after[k]; !ok {
-			diff[k] = nil
-		}
-	}
-	return diff
-}
+

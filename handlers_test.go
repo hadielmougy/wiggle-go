@@ -52,11 +52,11 @@ func TestRegisterHandlersMatchesByNameAndKind(t *testing.T) {
 	if err != nil || got != true {
 		t.Fatalf("gate = %v, %v", got, err)
 	}
-	// task wrapper returns only the diff
-	diff, _ := w.handlers["order#charge"](Context{"orderId": "o1", "qty": 1.0})
-	m := diff.(Context)
-	if m["paid"] != true || len(m) != 1 {
-		t.Fatalf("charge diff = %v (want just paid)", m)
+	// task wrapper returns the WHOLE next context (it replaces server-side)
+	res, _ := w.handlers["order#charge"](Context{"orderId": "o1", "qty": 1.0})
+	m := res.(Context)
+	if m["paid"] != true || m["orderId"] != "o1" {
+		t.Fatalf("charge result = %v (want the complete context incl. paid)", m)
 	}
 	// effect wrapper returns nil
 	if r, _ := w.handlers["order#notify"](Context{}); r != nil {
