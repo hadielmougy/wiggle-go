@@ -75,6 +75,23 @@ func taskHandler(fn Activity) activityHandler {
 	}
 }
 
+// combineHandler wraps a combine step's Activity: unlike taskHandler there is NO diff -- the
+// return is the COMPLETE post-join context and is sent verbatim, because the engine REPLACES the
+// context with it (keys the handler omits do not survive the join). A nil return leaves the
+// context untouched.
+func combineHandler(fn Activity) activityHandler {
+	return func(ctx Context) (any, error) {
+		out, err := fn(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if out == nil {
+			return nil, nil
+		}
+		return out, nil
+	}
+}
+
 // shallowDiff returns only the keys of after that differ from before; a key present in before but
 // absent from after is set to nil (a dropped key becomes null), matching the engine's merge. This is
 // what a task handler sends back so parallel branches touching different fields merge cleanly.

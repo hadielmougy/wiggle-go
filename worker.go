@@ -108,6 +108,14 @@ func (w *Worker) HandleEffect(workflow, step string, fn SideEffect) *Worker {
 	})
 }
 
+// HandleCombine binds the mandatory merge step that follows a fork's join. fn receives the context
+// with each branch's result staged under the branch's name, and must return the COMPLETE post-join
+// context: it is sent verbatim (no diff, no implicit fold) and the engine REPLACES the context with
+// it -- keys fn omits do not survive the join.
+func (w *Worker) HandleCombine(workflow, step string, fn Activity) *Worker {
+	return w.bind(workflow, step, "COMBINE", combineHandler(fn))
+}
+
 func (w *Worker) bind(workflow, step, kind string, h activityHandler) *Worker {
 	activity := workflow + "#" + step
 	if _, dup := w.handlers[activity]; dup {
@@ -186,7 +194,18 @@ func (w *Worker) reconcile(ctx context.Context) error {
 				return fmt.Errorf("no step %q in registered workflow %q (available: %v)",
 					c.step, wf, availableSteps(nodes))
 			}
-			if k, _ := node["kind"].(string); k != c.kind {
+			k, _ := node["kind"].(string)
+			itemsKey, _ := node["itemsKey"].(string)
+			isCombine := k == "TASK" && itemsKey != ""
+			switch {
+			case c.kind == "COMBINE" && !isCombine:
+				return fmt.Errorf("activity %q is not a fork combine; bind it with Handle()", activity)
+			case c.kind == "COMBINE":
+				// ok: a combine claim on a combine node
+			case isCombine:
+				return fmt.Errorf("activity %q is a fork combine; bind it with HandleCombine() -- "+
+					"its return is the complete post-join context (no implicit fold)", activity)
+			case k != c.kind:
 				verb := "Handle"
 				if k == "PREDICATE" {
 					verb = "HandleGate"

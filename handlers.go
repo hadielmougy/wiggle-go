@@ -30,6 +30,7 @@ type handlerCandidate struct {
 	name    string          // the exported method name, for error messages
 	kind    string          // the graph node kind this handler expects: "TASK" or "PREDICATE"
 	handler activityHandler // pre-wrapped, ready to bind
+	raw     Activity        // the unwrapped Activity (nil for gates/effects); a combine binds this verbatim
 }
 
 type handlerSet struct {
@@ -97,13 +98,13 @@ func asHandlerCandidate(name string, m reflect.Value) (handlerCandidate, bool) {
 	switch {
 	case mt.NumOut() == 2 && mt.Out(0) == reflectCtxType && mt.Out(1) == reflectErrType:
 		fn := m.Interface().(func(Context) (Context, error))
-		return handlerCandidate{name, "TASK", taskHandler(fn)}, true
+		return handlerCandidate{name, "TASK", taskHandler(fn), fn}, true
 	case mt.NumOut() == 2 && mt.Out(0) == reflectBoolType && mt.Out(1) == reflectErrType:
 		fn := m.Interface().(func(Context) (bool, error))
-		return handlerCandidate{name, "PREDICATE", func(ctx Context) (any, error) { return fn(ctx) }}, true
+		return handlerCandidate{name, "PREDICATE", func(ctx Context) (any, error) { return fn(ctx) }, nil}, true
 	case mt.NumOut() == 1 && mt.Out(0) == reflectErrType:
 		fn := m.Interface().(func(Context) error)
-		return handlerCandidate{name, "TASK", func(ctx Context) (any, error) { return nil, fn(ctx) }}, true
+		return handlerCandidate{name, "TASK", func(ctx Context) (any, error) { return nil, fn(ctx) }, nil}, true
 	}
 	return handlerCandidate{}, false
 }
@@ -151,7 +152,18 @@ func (w *Worker) bindHandlerSet(graph map[string]any, set handlerSet) error {
 		if _, dup := w.handlers[activity]; dup {
 			return fmt.Errorf("duplicate handler for activity %q", activity)
 		}
-		w.handlers[activity] = cand.handler
+		if itemsKey, _ := node["itemsKey"].(string); itemsKey != "" {
+			// A combine node: its return is the COMPLETE post-join context, sent verbatim (no
+			// diff) -- the engine replaces the context with it. Only an Activity shape can serve it.
+			if cand.raw == nil {
+				return fmt.Errorf("step %q of workflow %q is a fork combine; handler %q must be "+
+					"func(Context) (Context, error) returning the complete post-join context",
+					step, set.workflow, cand.name)
+			}
+			w.handlers[activity] = combineHandler(cand.raw)
+		} else {
+			w.handlers[activity] = cand.handler
+		}
 		queue, _ := node["queue"].(string)
 		if queue == "" {
 			queue = set.workflow

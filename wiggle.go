@@ -12,7 +12,8 @@ import "fmt"
 type Context = map[string]any
 
 // Activity runs a task step: it receives the context and returns the new context. Only the changed
-// keys are sent back (the engine shallow-diffs and merges).
+// keys are sent back (the engine shallow-diffs and merges) -- except for a fork's combine step,
+// whose return is the complete post-join context sent verbatim (see Worker.HandleCombine).
 type Activity func(Context) (Context, error)
 
 // SideEffect runs a step for its side effect only; the context is left unchanged.

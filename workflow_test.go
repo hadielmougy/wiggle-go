@@ -75,7 +75,7 @@ func TestForkJoin(t *testing.T) {
 			Fork{Branches: []Branch{
 				{Name: "payment", Steps: []Node{Step{Name: "charge"}}},
 				{Name: "shipping", Steps: []Node{Step{Name: "reserve"}, Step{Name: "label"}}},
-			}},
+			}, Combine: "merge"},
 			Effect{Name: "notify"},
 		},
 	}.MustCompile()
@@ -92,9 +92,35 @@ func TestForkJoin(t *testing.T) {
 	if join["expected"] != 2 {
 		t.Fatalf("join expected = %v (want 2)", join["expected"])
 	}
-	if join["next"] != nodeByName(def, "notify")["id"] {
-		t.Fatalf("flow does not continue after the join")
+	// The join flows into the mandatory combine (a TASK carrying the arm names on itemsKey),
+	// and only then into the next step -- there is no implicit fold.
+	combine := nodeByName(def, "merge")
+	if combine["kind"] != "TASK" || combine["itemsKey"] != `["payment","shipping"]` {
+		t.Fatalf("combine node wrong: %v", combine)
 	}
+	if join["next"] != combine["id"] {
+		t.Fatalf("join must flow into the combine, got %v", join["next"])
+	}
+	if combine["next"] != nodeByName(def, "notify")["id"] {
+		t.Fatalf("flow does not continue after the combine")
+	}
+}
+
+func TestForkRequiresCombine(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatalf("a Fork without Combine must fail to compile")
+		}
+	}()
+	_ = Graph{
+		Name: "no-combine",
+		Steps: []Node{
+			Fork{Branches: []Branch{
+				{Name: "a", Steps: []Node{Step{Name: "a1"}}},
+				{Name: "b", Steps: []Node{Step{Name: "b1"}}},
+			}},
+		},
+	}.MustCompile()
 }
 
 func TestDoWhileCycle(t *testing.T) {

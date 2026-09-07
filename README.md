@@ -93,7 +93,7 @@ wf := wiggle.Graph{
 		wiggle.Fork{Branches: []wiggle.Branch{
 			{Name: "payment",  Steps: []wiggle.Node{wiggle.Step{Name: "charge", Queue: "payments"}}},
 			{Name: "shipping", Steps: []wiggle.Node{wiggle.Step{Name: "reserve"}, wiggle.Step{Name: "label"}}},
-		}},
+		}, Combine: "merge"}, // mandatory: branches rejoin at an explicit merge handler (HandleCombine)
 		wiggle.Choose{Cases: []wiggle.Case{
 			{When: "vip", Then: []wiggle.Node{wiggle.Step{Name: "concierge"}}},
 			{Then: []wiggle.Node{wiggle.Step{Name: "thanks"}}}, // no When -> the otherwise case (must be last)
@@ -108,13 +108,33 @@ wf := wiggle.Graph{
 | `Step{Name, Queue, Retry}` | a task run on a worker (`Handle`); only changed context keys are merged back |
 | `Effect{Name, Queue, Retry}` | a side-effect step (`HandleEffect`); context unchanged |
 | `Gate{Name, Queue, Retry}` | a predicate (`HandleGate`); false ends the instance as `gated:<name>` |
-| `Fork{Branches}` | run branches in parallel, then wait for all (join) |
+| `Fork{Branches, Combine}` | run branches in parallel on isolated context copies, then rejoin at the **mandatory** `Combine` step (`HandleCombine`) — no implicit fold |
 | `ForkEach{Name, Over, As, Body}` | runtime fan-out: one branch per element of the list at `Over` (bound to `As`) |
 | `Choose{Cases}` | exclusive choice: the first `Case` whose `When` guard holds runs; a `Case` with no `When` is the otherwise (last) |
 | `DoWhile{While, Body}` | run `Body`, then repeat while the `While` predicate holds (body runs at least once) |
 | `SubWorkflow{Name, Workflow}` | run another workflow as a child; its result merges back |
 | `Sleep{Name, For}` | server-side timer (`For` is a `time.Duration`); no worker is held |
 | `AwaitSignal{Name, Timeout, Escalation}` | wait for a signal (`Client.Signal`); on `Timeout`, fail — or run `Escalation` and rejoin |
+
+A fork's combine is bound with `HandleCombine(workflow, step, fn)`: `fn` receives the context with
+each branch's result staged under the branch's name, and must return the **complete** post-join
+context — the engine replaces the context with it, so keys the handler omits do not survive the
+join (there is no implicit union of the arms).
+
+```go
+worker.HandleCombine("order", "merge", func(ctx wiggle.Context) (wiggle.Context, error) {
+	out := wiggle.Context{}
+	for k, v := range ctx { out[k] = v }          // carry the pre-fork context explicitly
+	delete(out, "payment"); delete(out, "shipping") // drop the staged arm keys
+	if p, ok := ctx["payment"].(map[string]any); ok {
+		for k, v := range p { out[k] = v }         // fold what the payment arm produced
+	}
+	if s, ok := ctx["shipping"].(map[string]any); ok {
+		for k, v := range s { out[k] = v }
+	}
+	return out, nil
+})
+```
 
 Per-step: `Queue` (defaults to `DefaultQueue`, else the workflow name) and `Retry`
 (`RetryExponential/RetryFixed/RetryNone/RetryForever`). `Branch{Name, Steps}` and `Case{When, Then}`

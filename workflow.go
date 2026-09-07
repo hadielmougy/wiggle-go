@@ -127,9 +127,15 @@ type Branch struct {
 	Steps []Node
 }
 
-// Fork fans out into parallel branches and waits for all of them (needs >= 2).
+// Fork fans out into parallel branches and waits for all of them (needs >= 2). Combine names the
+// MANDATORY merge step that runs after the join: its handler receives the context with each
+// branch's result staged under the branch's name, and must return the COMPLETE post-join context
+// (the engine replaces the context with it -- there is no implicit fold of the arms, and keys the
+// handler omits do not survive the join). Bind it with Worker.HandleCombine or a RegisterHandlers
+// method matched by name.
 type Fork struct {
 	Branches []Branch
+	Combine  string
 }
 
 // ForkEach fans out one branch per element of the list at Over, injecting each element under As
@@ -252,6 +258,16 @@ func (g *graph) addDynFork(name, itemsKey, itemKey string) string {
 	g.reserve(name)
 	id := g.nid("dynfork")
 	g.nodes[id] = map[string]any{"id": id, "kind": "DYN_FORK", "name": name, "itemsKey": itemsKey, "itemKey": itemKey}
+	return id
+}
+
+// addCombine emits the mandatory merge node after a fork's join: a TASK bound by name like any
+// step, carrying the fork's arm names (a JSON array) on its itemsKey so the engine can stage each
+// isolated branch's result under its name for the handler, and strip those keys afterward.
+func (g *graph) addCombine(name string, arms []string) string {
+	id := g.addWorker("TASK", name, "", Retry{})
+	names, _ := json.Marshal(arms)
+	g.nodes[id]["itemsKey"] = string(names)
 	return id
 }
 
@@ -387,15 +403,22 @@ func (b *builder) appendNode(n Node) {
 		if len(node.Branches) < 2 {
 			fail("fork needs at least two branches")
 		}
+		if node.Combine == "" {
+			fail("fork needs a combine step name (Fork.Combine): branches rejoin at an explicit merge handler")
+		}
 		forkID := b.g.addFork()
 		b.attach(forkID)
 		joinID := b.g.addJoin(len(node.Branches))
 		starts := make([]string, 0, len(node.Branches))
+		arms := make([]string, 0, len(node.Branches))
 		for _, br := range node.Branches {
 			starts = append(starts, b.buildBranch(br, joinID))
+			arms = append(arms, br.Name)
 		}
 		b.g.setBranches(forkID, starts)
-		b.open = []openEnd{{joinID, "next"}}
+		combineID := b.g.addCombine(node.Combine, arms)
+		b.g.wire(joinID, "next", combineID)
+		b.open = []openEnd{{combineID, "next"}}
 	case ForkEach:
 		if len(node.Body) == 0 {
 			fail("fork_each %q body defines no steps", node.Name)
