@@ -138,17 +138,17 @@ type Fork struct {
 	Combine  string
 }
 
-// ForEach fans out one ISOLATED branch per element of the collection at Over (a list or a map),
-// injecting each element under As (its index under As+"Index" and, for a map, its key under
-// As+"Key"). Item writes never touch the shared context. Combine names the MANDATORY merge step:
-// its handler receives the context with every item's final context collected under the forEach's
-// name — a list ordered by item index for a list input, a map keyed like the input for a map input
-// — and must return the COMPLETE post-join context (the engine replaces the context with it). An
-// empty collection skips the body and the combine.
+// ForEach fans out one ISOLATED branch per element of the collection at Over (a list or a map).
+// The element IS each item's context: body steps are bound with HandleItem (or an
+// ItemActivity-shaped method) — they receive the item's current value and their return replaces
+// it; the frozen base and the element's index/source key ride on the activation. Combine names the
+// MANDATORY merge step: its handler receives the context with every item's FINAL VALUE collected
+// under the forEach's name — a list ordered by item index for a list input, a map keyed like the
+// input for a map input — and must return the COMPLETE post-join context. An empty collection
+// skips the body and the combine.
 type ForEach struct {
 	Name    string // label; the collected results are staged under this key for the combine
 	Over    string // itemsKey
-	As      string // itemKey
 	Body    []Node
 	Combine string
 }
@@ -444,9 +444,9 @@ func (b *builder) appendNode(n Node) {
 		}
 		name := node.Name
 		if name == "" {
-			name = node.As
+			name = node.Over
 		}
-		forkID := b.g.addDynFork(name, node.Over, node.As)
+		forkID := b.g.addDynFork(name, node.Over, node.Over)
 		b.attach(forkID)
 		joinID := b.g.addJoin(0)
 		template := b.buildBranch(Branch{Name: name, Steps: node.Body}, joinID)

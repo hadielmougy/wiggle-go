@@ -19,6 +19,12 @@ type Activity func(Context) (Context, error)
 // SideEffect runs a step for its side effect only; the context is left unchanged.
 type SideEffect func(Context) error
 
+// ItemActivity runs one step of a forEach body: base is the frozen pre-forEach context (read-only —
+// items can never write it; only the combine's return reaches the shared context) and item is the
+// element's current value (any JSON value, scalars included). The return replaces the item's value;
+// nil leaves it untouched.
+type ItemActivity func(base Context, item any) (any, error)
+
 // Predicate evaluates a gate, a choose guard, or a do-while condition.
 type Predicate func(Context) (bool, error)
 

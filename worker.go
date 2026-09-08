@@ -52,6 +52,7 @@ type Worker struct {
 	id     string
 
 	handlers    map[string]activityHandler
+	itemHandlers map[string]ItemActivity
 	queues      map[string]bool
 	claims      []claim
 	handlerSets []handlerSet
@@ -75,6 +76,7 @@ func NewWorker(client *Client, id string, opts ...WorkerOption) *Worker {
 	w := &Worker{
 		client: client, id: id,
 		handlers:     map[string]activityHandler{},
+		itemHandlers: map[string]ItemActivity{},
 		queues:       map[string]bool{},
 		concurrency:  runtime.NumCPU(),
 		leaseMillis:  30_000,
@@ -114,6 +116,18 @@ func (w *Worker) HandleEffect(workflow, step string, fn SideEffect) *Worker {
 // it -- keys fn omits do not survive the join.
 func (w *Worker) HandleCombine(workflow, step string, fn Activity) *Worker {
 	return w.bind(workflow, step, "COMBINE", combineHandler(fn))
+}
+
+// HandleItem binds one step of a forEach body: fn receives the frozen pre-forEach context (base,
+// read-only) and the item's current value, and its return replaces that value (nil = untouched).
+func (w *Worker) HandleItem(workflow, step string, fn ItemActivity) *Worker {
+	activity := workflow + "#" + step
+	if _, dup := w.itemHandlers[activity]; dup {
+		panic(fmt.Sprintf("duplicate handler for activity %q", activity))
+	}
+	w.itemHandlers[activity] = fn
+	w.claims = append(w.claims, claim{workflow, step, "TASK"})
+	return w
 }
 
 func (w *Worker) bind(workflow, step, kind string, h activityHandler) *Worker {
@@ -307,6 +321,15 @@ func (w *Worker) pollLoop() {
 
 func (w *Worker) execute(task *Task) {
 	ctx := context.Background()
+	if task.IsItem {
+		w.executeItem(ctx, task)
+		return
+	}
+	if _, item := w.itemHandlers[task.Activity]; item {
+		_ = w.client.Fail(ctx, task.TaskID, task.LeaseOwner,
+			fmt.Sprintf("activity %q was bound with HandleItem but is not a forEach item step; use Handle()", task.Activity), false)
+		return
+	}
 	handler, ok := w.handlers[task.Activity]
 	if !ok {
 		_ = w.client.Fail(ctx, task.TaskID, task.LeaseOwner,
@@ -329,6 +352,34 @@ func (w *Worker) execute(task *Task) {
 	if task.Kind == "PREDICATE" {
 		b, _ := result.(bool)
 		_ = w.client.Complete(ctx, task.TaskID, task.LeaseOwner, Context{"value": b})
+		return
+	}
+	_ = w.client.Complete(ctx, task.TaskID, task.LeaseOwner, result)
+}
+
+// executeItem runs a forEach body step: the handler gets (base, item) and its return replaces the
+// item's value. A step bound with plain Handle cannot serve an item (the context is the raw item
+// value, possibly a scalar) -- fail fast with a pointer to HandleItem.
+func (w *Worker) executeItem(ctx context.Context, task *Task) {
+	fn, ok := w.itemHandlers[task.Activity]
+	if !ok {
+		hint := "no handler registered for activity %q"
+		if _, plain := w.handlers[task.Activity]; plain {
+			hint = "activity %q is a forEach item step; bind it with HandleItem(base, item)"
+		}
+		_ = w.client.Fail(ctx, task.TaskID, task.LeaseOwner, fmt.Sprintf(hint, task.Activity), false)
+		return
+	}
+	stop := w.startHeartbeat(task)
+	defer close(stop)
+	result, err := fn(task.BaseContext, task.RawContext)
+	if err != nil {
+		var perm *PermanentError
+		if errors.As(err, &perm) {
+			_ = w.client.Fail(ctx, task.TaskID, task.LeaseOwner, perm.Error(), false)
+		} else {
+			_ = w.client.Fail(ctx, task.TaskID, task.LeaseOwner, err.Error(), true)
+		}
 		return
 	}
 	_ = w.client.Complete(ctx, task.TaskID, task.LeaseOwner, result)

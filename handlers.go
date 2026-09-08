@@ -22,6 +22,7 @@ import (
 // reflection types compared against method signatures (Context is an alias for map[string]any).
 var (
 	reflectCtxType  = reflect.TypeOf(Context{})
+	reflectAnyType  = reflect.TypeOf((*any)(nil)).Elem()
 	reflectErrType  = reflect.TypeOf((*error)(nil)).Elem()
 	reflectBoolType = reflect.TypeOf(false)
 )
@@ -29,8 +30,9 @@ var (
 type handlerCandidate struct {
 	name    string          // the exported method name, for error messages
 	kind    string          // the graph node kind this handler expects: "TASK" or "PREDICATE"
-	handler activityHandler // pre-wrapped, ready to bind
+	handler activityHandler // pre-wrapped, ready to bind (nil for item candidates)
 	raw     Activity        // the unwrapped Activity (nil for gates/effects); a combine binds this verbatim
+	item    ItemActivity    // a forEach body step: func(base Context, item any) (any, error)
 }
 
 type handlerSet struct {
@@ -68,6 +70,9 @@ func (w *Worker) RegisterHandlers(workflow string, handlers any) *Worker {
 		name := t.Method(i).Name
 		cand, ok := asHandlerCandidate(name, v.Method(i))
 		if !ok {
+			cand, ok = asItemCandidate(name, v.Method(i))
+		}
+		if !ok {
 			continue
 		}
 		canon := canonicalName(name)
@@ -98,15 +103,28 @@ func asHandlerCandidate(name string, m reflect.Value) (handlerCandidate, bool) {
 	switch {
 	case mt.NumOut() == 2 && mt.Out(0) == reflectCtxType && mt.Out(1) == reflectErrType:
 		fn := m.Interface().(func(Context) (Context, error))
-		return handlerCandidate{name, "TASK", taskHandler(fn), fn}, true
+		return handlerCandidate{name, "TASK", taskHandler(fn), fn, nil}, true
 	case mt.NumOut() == 2 && mt.Out(0) == reflectBoolType && mt.Out(1) == reflectErrType:
 		fn := m.Interface().(func(Context) (bool, error))
-		return handlerCandidate{name, "PREDICATE", func(ctx Context) (any, error) { return fn(ctx) }, nil}, true
+		return handlerCandidate{name, "PREDICATE", func(ctx Context) (any, error) { return fn(ctx) }, nil, nil}, true
 	case mt.NumOut() == 1 && mt.Out(0) == reflectErrType:
 		fn := m.Interface().(func(Context) error)
-		return handlerCandidate{name, "TASK", func(ctx Context) (any, error) { return nil, fn(ctx) }, nil}, true
+		return handlerCandidate{name, "TASK", func(ctx Context) (any, error) { return nil, fn(ctx) }, nil, nil}, true
 	}
 	return handlerCandidate{}, false
+}
+
+// asItemCandidate matches the forEach body shape: func(base Context, item any) (any, error).
+func asItemCandidate(name string, m reflect.Value) (handlerCandidate, bool) {
+	mt := m.Type()
+	if mt.NumIn() != 2 || mt.In(0) != reflectCtxType || mt.In(1) != reflectAnyType {
+		return handlerCandidate{}, false
+	}
+	if mt.NumOut() != 2 || mt.Out(0) != reflectAnyType || mt.Out(1) != reflectErrType {
+		return handlerCandidate{}, false
+	}
+	fn := m.Interface().(func(Context, any) (any, error))
+	return handlerCandidate{name: name, kind: "TASK", item: fn}, true
 }
 
 // matchHandlerSet resolves a RegisterHandlers set against the registered graph, then binds each method.
@@ -151,6 +169,16 @@ func (w *Worker) bindHandlerSet(graph map[string]any, set handlerSet) error {
 		}
 		if _, dup := w.handlers[activity]; dup {
 			return fmt.Errorf("duplicate handler for activity %q", activity)
+		}
+		if cand.item != nil {
+			// A forEach body step: bound into the item registry; dispatched by activation shape.
+			w.itemHandlers[activity] = cand.item
+			queue, _ := node["queue"].(string)
+			if queue == "" {
+				queue = set.workflow
+			}
+			w.queues[queue] = true
+			continue
 		}
 		if itemsKey, _ := node["itemsKey"].(string); itemsKey != "" {
 			// A combine node: its return is the COMPLETE post-join context, sent verbatim (no

@@ -191,7 +191,7 @@ func TestForEachEmitsCombine(t *testing.T) {
 	bp := Graph{
 		Name: "each",
 		Steps: []Node{
-			ForEach{Name: "per-item", Over: "items", As: "item",
+			ForEach{Name: "per-item", Over: "items",
 				Body: []Node{Step{Name: "price"}}, Combine: "collect"},
 			Step{Name: "after"},
 		},
@@ -222,7 +222,7 @@ func TestForEachRequiresCombine(t *testing.T) {
 		}
 	}()
 	_ = Graph{Name: "bad", Steps: []Node{
-		ForEach{Name: "x", Over: "items", As: "item", Body: []Node{Step{Name: "s"}}},
+		ForEach{Name: "x", Over: "items", Body: []Node{Step{Name: "s"}}},
 	}}.MustCompile()
 }
 

@@ -109,7 +109,7 @@ wf := wiggle.Graph{
 | `Effect{Name, Queue, Retry}` | a side-effect step (`HandleEffect`); context unchanged |
 | `Gate{Name, Queue, Retry}` | a predicate (`HandleGate`); false ends the instance as `gated:<name>` |
 | `Fork{Branches, Combine}` | run branches in parallel on isolated context copies, then rejoin at the **mandatory** `Combine` step (`HandleCombine`) — no implicit fold |
-| `ForEach{Name, Over, As, Body, Combine}` | runtime fan-out: one **isolated** branch per element of the list (or map) at `Over` (bound to `As`); the **mandatory** `Combine` handler receives every item's final context collected under `Name` (a list, or a map keyed like the input) and returns the complete post-join context |
+| `ForEach{Name, Over, Body, Combine}` | runtime fan-out: one **isolated** branch per element of the list (or map) at `Over`. **The element IS the item's context** — body steps are bound with `HandleItem(base, item)` and their return replaces the item's value (scalars included). The **mandatory** `Combine` handler receives every item's final value collected under `Name` (a list, or a map keyed like the input) and returns the complete post-join context |
 | `Choose{Cases}` | exclusive choice: the first `Case` whose `When` guard holds runs; a `Case` with no `When` is the otherwise (last) |
 | `DoWhile{While, Body}` | run `Body`, then repeat while the `While` predicate holds (body runs at least once) |
 | `SubWorkflow{Name, Workflow}` | run another workflow as a child; its result merges back |

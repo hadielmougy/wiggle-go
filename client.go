@@ -275,7 +275,9 @@ func (c *Client) Health(ctx context.Context) (status, node string, leader bool, 
 
 // ---- worker RPCs (used by Worker) ----
 
-// Task is one unit of work handed to a worker.
+// Task is one unit of work handed to a worker. For a forEach item step (IsItem), RawContext is the
+// ITEM's current value (any JSON value, scalars included) and BaseContext is the frozen pre-forEach
+// context; Context is then RawContext's map form (empty for scalar items).
 type Task struct {
 	TaskID, InstanceID, Workflow string
 	Version                      int32
@@ -285,6 +287,11 @@ type Task struct {
 	LeaseExpiresAt               int64
 	LeaseOwner                   string
 	Context                      Context
+	RawContext                   any
+	IsItem                       bool
+	BaseContext                  Context
+	ItemIndex                    int64
+	ItemMapKey                   string
 	ExecutionMode                string
 }
 
@@ -304,12 +311,17 @@ func (c *Client) Poll(ctx context.Context, workerID string, queues []string, max
 	}
 	out := &PollResult{RetryAfterMillis: res.GetRetryAfterMillis()}
 	for _, t := range res.GetTasks() {
+		raw := fromValue(t.GetContext())
 		out.Tasks = append(out.Tasks, &Task{
 			TaskID: t.GetTaskId(), InstanceID: t.GetInstanceId(), Workflow: t.GetWorkflow(),
 			Version: t.GetVersion(), NodeID: t.GetNodeId(), StepName: t.GetStepName(),
 			Activity: t.GetActivity(), Kind: t.GetKind(), Attempt: t.GetAttempt(),
 			LeaseExpiresAt: t.GetLeaseExpiresAt(), LeaseOwner: t.GetLeaseOwner(),
-			Context: asMap(fromValue(t.GetContext())), ExecutionMode: t.GetExecutionMode(),
+			Context: asMap(raw), RawContext: raw,
+			IsItem:      t.GetBaseContext() != nil,
+			BaseContext: asMap(fromValue(t.GetBaseContext())),
+			ItemIndex:   t.GetItemIndex(), ItemMapKey: t.GetItemMapKey(),
+			ExecutionMode: t.GetExecutionMode(),
 		})
 	}
 	return out, nil
