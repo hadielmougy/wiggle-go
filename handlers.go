@@ -127,18 +127,84 @@ func asItemCandidate(name string, m reflect.Value) (handlerCandidate, bool) {
 	return handlerCandidate{name: name, kind: "TASK", item: fn}, true
 }
 
-// matchHandlerSet resolves a RegisterHandlers set against the registered graph, then binds each method.
+// taskHandler wraps a user Activity into the internal handler. The return is the step's COMPLETE
+// next context: it is sent whole and REPLACES the previous value server-side (no diff, no merge).
+// A nil return leaves the context untouched.
+func taskHandler(fn Activity) activityHandler {
+	return func(ctx Context) (any, error) {
+		out, err := fn(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if out == nil {
+			return nil, nil
+		}
+		return out, nil
+	}
+}
+
+// combineHandler wraps a combine step's Activity: unlike taskHandler there is NO diff -- the
+// return is the COMPLETE post-join context and is sent verbatim, because the engine REPLACES the
+// context with it (keys the handler omits do not survive the join). A nil return leaves the
+// context untouched.
+func combineHandler(fn Activity) activityHandler {
+	return func(ctx Context) (any, error) {
+		out, err := fn(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if out == nil {
+			return nil, nil
+		}
+		return out, nil
+	}
+}
+
+// binding is one resolved handler: where it plugs into the worker, and exactly one of
+// handler/item set (a forEach body step binds an ItemActivity; everything else an activityHandler).
+type binding struct {
+	activity string
+	step     string
+	queue    string
+	handler  activityHandler
+	item     ItemActivity
+}
+
+// matchHandlerSet resolves a RegisterHandlers set against the registered graph (fetched here --
+// the binder itself is pure), then installs the resulting bindings.
 func (w *Worker) matchHandlerSet(ctx context.Context, set handlerSet) error {
 	graph, err := w.fetchGraph(ctx, set.workflow)
 	if err != nil {
 		return err
 	}
-	return w.bindHandlerSet(graph, set)
+	bindings, err := bindHandlerSet(graph, set)
+	if err != nil {
+		return err
+	}
+	return w.applyBindings(bindings)
 }
 
-// bindHandlerSet matches a set's candidates to the graph's steps by canonical name and binds them.
-// Split out from matchHandlerSet so it can be exercised offline against a compiled Graph's Definition.
-func (w *Worker) bindHandlerSet(graph map[string]any, set handlerSet) error {
+// applyBindings installs resolved bindings into the worker's registries (the only stateful part).
+func (w *Worker) applyBindings(bindings []binding) error {
+	for _, b := range bindings {
+		if _, dup := w.handlers[b.activity]; dup {
+			return fmt.Errorf("duplicate handler for activity %q", b.activity)
+		}
+		if b.item != nil {
+			w.itemHandlers[b.activity] = b.item
+		} else {
+			w.handlers[b.activity] = b.handler
+		}
+		w.queues[b.queue] = true
+	}
+	return nil
+}
+
+// bindHandlerSet matches a set's candidates to the graph's steps by canonical name, validates each
+// candidate's shape against its node kind, and builds the invocation wrappers. PURE: graph in,
+// bindings out -- no I/O, no worker state -- so every rule here is testable offline against a
+// compiled Graph's Definition (mirrors the Java HandlerBinder / Python wiggle._binder).
+func bindHandlerSet(graph map[string]any, set handlerSet) ([]binding, error) {
 	nodeByCanon := map[string]map[string]any{} // canonical step name -> node
 	stepByCanon := map[string]string{}         // canonical step name -> real step name
 	for _, n := range asList(graph["nodes"]) {
@@ -154,51 +220,43 @@ func (w *Worker) bindHandlerSet(graph map[string]any, set handlerSet) error {
 			stepByCanon[c] = name
 		}
 	}
+	var bindings []binding
 	for _, canon := range sortedKeys(set.candidates) { // deterministic order for stable errors
 		cand := set.candidates[canon]
 		node, ok := nodeByCanon[canon]
 		if !ok {
-			return fmt.Errorf("handler %q matches no step in workflow %q (available: %v)",
+			return nil, fmt.Errorf("handler %q matches no step in workflow %q (available: %v)",
 				cand.name, set.workflow, sortedValues(stepByCanon))
 		}
 		step := stepByCanon[canon]
 		activity := set.workflow + "#" + step
 		if k, _ := node["kind"].(string); k != cand.kind {
-			return fmt.Errorf("activity %q is a %s in the graph but handler %q is a %s",
+			return nil, fmt.Errorf("activity %q is a %s in the graph but handler %q is a %s",
 				activity, k, cand.name, cand.kind)
-		}
-		if _, dup := w.handlers[activity]; dup {
-			return fmt.Errorf("duplicate handler for activity %q", activity)
-		}
-		if cand.item != nil {
-			// A forEach body step: bound into the item registry; dispatched by activation shape.
-			w.itemHandlers[activity] = cand.item
-			queue, _ := node["queue"].(string)
-			if queue == "" {
-				queue = set.workflow
-			}
-			w.queues[queue] = true
-			continue
-		}
-		if itemsKey, _ := node["itemsKey"].(string); itemsKey != "" {
-			// A combine node: its return is the COMPLETE post-join context, sent verbatim (no
-			// diff) -- the engine replaces the context with it. Only an Activity shape can serve it.
-			if cand.raw == nil {
-				return fmt.Errorf("step %q of workflow %q is a fork combine; handler %q must be "+
-					"func(Context) (Context, error) returning the complete post-join context",
-					step, set.workflow, cand.name)
-			}
-			w.handlers[activity] = combineHandler(cand.raw)
-		} else {
-			w.handlers[activity] = cand.handler
 		}
 		queue, _ := node["queue"].(string)
 		if queue == "" {
 			queue = set.workflow
 		}
-		w.queues[queue] = true
+		if cand.item != nil {
+			// A forEach body step: dispatched by activation shape at execution time.
+			bindings = append(bindings, binding{activity: activity, step: step, queue: queue, item: cand.item})
+			continue
+		}
+		handler := cand.handler
+		if itemsKey, _ := node["itemsKey"].(string); itemsKey != "" {
+			// A combine node: its return is the COMPLETE post-join context, sent verbatim (no
+			// diff) -- the engine replaces the context with it. Only an Activity shape can serve it.
+			if cand.raw == nil {
+				return nil, fmt.Errorf("step %q of workflow %q is a fork combine; handler %q must be "+
+					"func(Context) (Context, error) returning the complete post-join context",
+					step, set.workflow, cand.name)
+			}
+			handler = combineHandler(cand.raw)
+		}
+		bindings = append(bindings, binding{activity: activity, step: step, queue: queue, handler: handler})
 	}
-	return nil
+	return bindings, nil
 }
 
 func sortedKeys(m map[string]handlerCandidate) []string {
