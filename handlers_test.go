@@ -39,7 +39,11 @@ func orderGraph() map[string]any {
 func TestRegisterHandlersMatchesByNameAndKind(t *testing.T) {
 	w := NewWorker(nil, "w")
 	w.RegisterHandlers("order", orderHandlers{})
-	if err := w.bindHandlerSet(orderGraph(), w.handlerSets[0]); err != nil {
+	bindings, err := bindHandlerSet(orderGraph(), w.handlerSets[0])
+	if err == nil {
+		err = w.applyBindings(bindings)
+	}
+	if err != nil {
 		t.Fatalf("bind: %v", err)
 	}
 	for _, act := range []string{"order#validate", "order#in-stock", "order#charge", "order#notify"} {
@@ -103,7 +107,7 @@ func (strayHandlers) ShipItNow(o Context) (Context, error) { return o, nil } // 
 
 func TestRegisterHandlersRejectsMethodMatchingNoStep(t *testing.T) {
 	w := NewWorker(nil, "w").RegisterHandlers("order", strayHandlers{})
-	err := w.bindHandlerSet(orderGraph(), w.handlerSets[0])
+	_, err := bindHandlerSet(orderGraph(), w.handlerSets[0])
 	if err == nil || !strings.Contains(err.Error(), "ShipItNow") {
 		t.Fatalf("want error about ShipItNow matching no step, got %v", err)
 	}
@@ -116,7 +120,7 @@ func (kindClashHandlers) InStock(o Context) (Context, error) { return o, nil }
 
 func TestRegisterHandlersRejectsKindClash(t *testing.T) {
 	w := NewWorker(nil, "w").RegisterHandlers("order", kindClashHandlers{})
-	err := w.bindHandlerSet(orderGraph(), w.handlerSets[0])
+	_, err := bindHandlerSet(orderGraph(), w.handlerSets[0])
 	if err == nil || !strings.Contains(err.Error(), "PREDICATE") {
 		t.Fatalf("want kind-clash error, got %v", err)
 	}
@@ -128,4 +132,70 @@ func keys(m map[string]activityHandler) []string {
 		out = append(out, k)
 	}
 	return out
+}
+// ---- pure-binder cases (mirrors Java HandlerBinderTest / Python test_binder) ----
+
+type eachHandlers struct{}
+
+func (eachHandlers) Norm(base Context, item any) (any, error) { return item, nil }
+func (eachHandlers) Collect(ctx Context) (Context, error)     { return ctx, nil }
+
+func TestBindHandlerSetIsPure(t *testing.T) {
+	bp := Graph{
+		Name: "each",
+		Steps: []Node{
+			ForEach{Name: "per-item", Over: "items", Body: []Node{Step{Name: "norm"}}, Combine: "collect"},
+			Step{Name: "after", Queue: "special"},
+		},
+	}.MustCompile()
+
+	w := NewWorker(nil, "w").RegisterHandlers("each", eachHandlers{})
+	bindings, err := bindHandlerSet(bp.Definition, w.handlerSets[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(w.handlers) != 0 || len(w.itemHandlers) != 0 {
+		t.Fatalf("bindHandlerSet must not touch worker state")
+	}
+	byStep := map[string]binding{}
+	for _, b := range bindings {
+		byStep[b.step] = b
+	}
+	if byStep["norm"].item == nil || byStep["norm"].handler != nil {
+		t.Fatalf("forEach body binds as an item handler: %+v", byStep["norm"])
+	}
+	if byStep["collect"].handler == nil {
+		t.Fatalf("combine binds as a regular handler (verbatim wrapper)")
+	}
+	if byStep["collect"].queue != "each" {
+		t.Fatalf("default queue = workflow name, got %q", byStep["collect"].queue)
+	}
+	if err := w.applyBindings(bindings); err != nil {
+		t.Fatal(err)
+	}
+	if w.itemHandlers["each#norm"] == nil || w.handlers["each#collect"] == nil {
+		t.Fatalf("applyBindings installs into the right registries")
+	}
+}
+
+type badCombineHandlers struct{}
+
+func (badCombineHandlers) A1(ctx Context) (Context, error) { return ctx, nil }
+func (badCombineHandlers) B1(ctx Context) (Context, error) { return ctx, nil }
+func (badCombineHandlers) Merge(ctx Context) error         { return nil } // an effect shape can't combine
+
+func TestBindRejectsNonActivityCombine(t *testing.T) {
+	bp := Graph{
+		Name: "wf",
+		Steps: []Node{
+			Fork{Branches: []Branch{
+				{Name: "a", Steps: []Node{Step{Name: "a1"}}},
+				{Name: "b", Steps: []Node{Step{Name: "b1"}}},
+			}, Combine: "merge"},
+		},
+	}.MustCompile()
+	w := NewWorker(nil, "w").RegisterHandlers("wf", badCombineHandlers{})
+	if _, err := bindHandlerSet(bp.Definition, w.handlerSets[0]); err == nil {
+		t.Fatalf("a combine bound to a non-Activity shape must fail")
+	}
 }
