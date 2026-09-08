@@ -127,18 +127,30 @@ type Branch struct {
 	Steps []Node
 }
 
-// Fork fans out into parallel branches and waits for all of them (needs >= 2).
+// Fork fans out into parallel branches and waits for all of them (needs >= 2). Combine names the
+// MANDATORY merge step that runs after the join: its handler receives the context with each
+// branch's result staged under the branch's name, and must return the COMPLETE post-join context
+// (the engine replaces the context with it -- there is no implicit fold of the arms, and keys the
+// handler omits do not survive the join). Bind it with Worker.HandleCombine or a RegisterHandlers
+// method matched by name.
 type Fork struct {
 	Branches []Branch
+	Combine  string
 }
 
-// ForkEach fans out one branch per element of the list at Over, injecting each element under As
-// (and its index under As+"Index").
-type ForkEach struct {
-	Name string // optional label
-	Over string // itemsKey
-	As   string // itemKey
-	Body []Node
+// ForEach fans out one ISOLATED branch per element of the collection at Over (a list or a map).
+// The element IS each item's context: body steps are bound with HandleItem (or an
+// ItemActivity-shaped method) — they receive the item's current value and their return replaces
+// it; the frozen base and the element's index/source key ride on the activation. Combine names the
+// MANDATORY merge step: its handler receives the context with every item's FINAL VALUE collected
+// under the forEach's name — a list ordered by item index for a list input, a map keyed like the
+// input for a map input — and must return the COMPLETE post-join context. An empty collection
+// skips the body and the combine.
+type ForEach struct {
+	Name    string // label; the collected results are staged under this key for the combine
+	Over    string // itemsKey
+	Body    []Node
+	Combine string
 }
 
 // Case is one arm of a Choose. When == "" marks the default (otherwise) arm, which must be last.
@@ -165,7 +177,7 @@ func (Sleep) isNode()       {}
 func (AwaitSignal) isNode() {}
 func (SubWorkflow) isNode() {}
 func (Fork) isNode()        {}
-func (ForkEach) isNode()    {}
+func (ForEach) isNode()     {}
 func (Choose) isNode()      {}
 func (DoWhile) isNode()     {}
 
@@ -252,6 +264,26 @@ func (g *graph) addDynFork(name, itemsKey, itemKey string) string {
 	g.reserve(name)
 	id := g.nid("dynfork")
 	g.nodes[id] = map[string]any{"id": id, "kind": "DYN_FORK", "name": name, "itemsKey": itemsKey, "itemKey": itemKey}
+	return id
+}
+
+// addCombine emits the mandatory merge node after a fork's join: a TASK bound by name like any
+// step, carrying the fork's arm names (a JSON array) on its itemsKey so the engine can stage each
+// isolated branch's result under its name for the handler, and strip those keys afterward.
+func (g *graph) addCombine(name string, arms []string) string {
+	id := g.addWorker("TASK", name, "", Retry{})
+	names, _ := json.Marshal(arms)
+	g.nodes[id]["itemsKey"] = string(names)
+	return id
+}
+
+// addForEachCombine emits the mandatory merge node after a forEach's join: a TASK bound by name,
+// whose itemsKey is a JSON STRING (the scratch key the engine stages the collected item results
+// under) — versus a fork combine's arm-name array.
+func (g *graph) addForEachCombine(name, scratchKey string) string {
+	id := g.addWorker("TASK", name, "", Retry{})
+	key, _ := json.Marshal(scratchKey)
+	g.nodes[id]["itemsKey"] = string(key)
 	return id
 }
 
@@ -387,30 +419,42 @@ func (b *builder) appendNode(n Node) {
 		if len(node.Branches) < 2 {
 			fail("fork needs at least two branches")
 		}
+		if node.Combine == "" {
+			fail("fork needs a combine step name (Fork.Combine): branches rejoin at an explicit merge handler")
+		}
 		forkID := b.g.addFork()
 		b.attach(forkID)
 		joinID := b.g.addJoin(len(node.Branches))
 		starts := make([]string, 0, len(node.Branches))
+		arms := make([]string, 0, len(node.Branches))
 		for _, br := range node.Branches {
 			starts = append(starts, b.buildBranch(br, joinID))
+			arms = append(arms, br.Name)
 		}
 		b.g.setBranches(forkID, starts)
-		b.open = []openEnd{{joinID, "next"}}
-	case ForkEach:
+		combineID := b.g.addCombine(node.Combine, arms)
+		b.g.wire(joinID, "next", combineID)
+		b.open = []openEnd{{combineID, "next"}}
+	case ForEach:
 		if len(node.Body) == 0 {
-			fail("fork_each %q body defines no steps", node.Name)
+			fail("for_each %q body defines no steps", node.Name)
+		}
+		if node.Combine == "" {
+			fail("for_each needs a combine step name (ForEach.Combine): item results rejoin at an explicit merge handler")
 		}
 		name := node.Name
 		if name == "" {
-			name = node.As
+			name = node.Over
 		}
-		forkID := b.g.addDynFork(name, node.Over, node.As)
+		forkID := b.g.addDynFork(name, node.Over, node.Over)
 		b.attach(forkID)
 		joinID := b.g.addJoin(0)
 		template := b.buildBranch(Branch{Name: name, Steps: node.Body}, joinID)
 		b.g.setBranches(forkID, []string{template})
-		b.g.wire(forkID, "next", joinID) // empty-list skip
-		b.open = []openEnd{{joinID, "next"}}
+		b.g.wire(forkID, "next", joinID) // empty-collection skip (past the combine too, engine-side)
+		combineID := b.g.addForEachCombine(node.Combine, name)
+		b.g.wire(joinID, "next", combineID)
+		b.open = []openEnd{{combineID, "next"}}
 	case Choose:
 		b.appendChoose(node)
 	case DoWhile:
