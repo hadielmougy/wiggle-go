@@ -895,10 +895,12 @@ func (x *InstanceDetail) GetTokens() []*Token {
 }
 
 type ListInstancesRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Workflow      *string                `protobuf:"bytes,1,opt,name=workflow,proto3,oneof" json:"workflow,omitempty"`
-	Status        *string                `protobuf:"bytes,2,opt,name=status,proto3,oneof" json:"status,omitempty"`
-	Limit         int32                  `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Workflow *string                `protobuf:"bytes,1,opt,name=workflow,proto3,oneof" json:"workflow,omitempty"`
+	Status   *string                `protobuf:"bytes,2,opt,name=status,proto3,oneof" json:"status,omitempty"`
+	Limit    int32                  `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`
+	// When set, return only instances started with this correlation id (business key lookup).
+	CorrelationId *string `protobuf:"bytes,4,opt,name=correlation_id,json=correlationId,proto3,oneof" json:"correlation_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -952,6 +954,13 @@ func (x *ListInstancesRequest) GetLimit() int32 {
 		return x.Limit
 	}
 	return 0
+}
+
+func (x *ListInstancesRequest) GetCorrelationId() string {
+	if x != nil && x.CorrelationId != nil {
+		return *x.CorrelationId
+	}
+	return ""
 }
 
 type InstanceList struct {
@@ -1559,8 +1568,13 @@ type TaskActivation struct {
 	LeaseOwner     string                 `protobuf:"bytes,11,opt,name=lease_owner,json=leaseOwner,proto3" json:"lease_owner,omitempty"`
 	Context        *structpb.Value        `protobuf:"bytes,12,opt,name=context,proto3" json:"context,omitempty"`
 	ExecutionMode  string                 `protobuf:"bytes,13,opt,name=execution_mode,json=executionMode,proto3" json:"execution_mode,omitempty"` // SERVER | LOCAL_SYNC | LOCAL_ASYNC (already resolved by the server)
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Set only for a forEach item step: `context` is then the ITEM's current value (any JSON value,
+	// scalars included), and base_context is the frozen pre-forEach context (read-only for items).
+	BaseContext   *structpb.Value `protobuf:"bytes,14,opt,name=base_context,json=baseContext,proto3" json:"base_context,omitempty"`
+	ItemIndex     int64           `protobuf:"varint,15,opt,name=item_index,json=itemIndex,proto3" json:"item_index,omitempty"`     // the item's position in the input collection
+	ItemMapKey    string          `protobuf:"bytes,16,opt,name=item_map_key,json=itemMapKey,proto3" json:"item_map_key,omitempty"` // the item's source key, when the input collection was a map
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *TaskActivation) Reset() {
@@ -1680,6 +1694,27 @@ func (x *TaskActivation) GetContext() *structpb.Value {
 func (x *TaskActivation) GetExecutionMode() string {
 	if x != nil {
 		return x.ExecutionMode
+	}
+	return ""
+}
+
+func (x *TaskActivation) GetBaseContext() *structpb.Value {
+	if x != nil {
+		return x.BaseContext
+	}
+	return nil
+}
+
+func (x *TaskActivation) GetItemIndex() int64 {
+	if x != nil {
+		return x.ItemIndex
+	}
+	return 0
+}
+
+func (x *TaskActivation) GetItemMapKey() string {
+	if x != nil {
+		return x.ItemMapKey
 	}
 	return ""
 }
@@ -2268,13 +2303,15 @@ const file_wiggle_proto_rawDesc = "" +
 	"\v_last_error\"}\n" +
 	"\x0eInstanceDetail\x12:\n" +
 	"\binstance\x18\x01 \x01(\v2\x1e.com.wiggle.proto.InstanceViewR\binstance\x12/\n" +
-	"\x06tokens\x18\x02 \x03(\v2\x17.com.wiggle.proto.TokenR\x06tokens\"\x82\x01\n" +
+	"\x06tokens\x18\x02 \x03(\v2\x17.com.wiggle.proto.TokenR\x06tokens\"\xc1\x01\n" +
 	"\x14ListInstancesRequest\x12\x1f\n" +
 	"\bworkflow\x18\x01 \x01(\tH\x00R\bworkflow\x88\x01\x01\x12\x1b\n" +
 	"\x06status\x18\x02 \x01(\tH\x01R\x06status\x88\x01\x01\x12\x14\n" +
-	"\x05limit\x18\x03 \x01(\x05R\x05limitB\v\n" +
+	"\x05limit\x18\x03 \x01(\x05R\x05limit\x12*\n" +
+	"\x0ecorrelation_id\x18\x04 \x01(\tH\x02R\rcorrelationId\x88\x01\x01B\v\n" +
 	"\t_workflowB\t\n" +
-	"\a_status\"L\n" +
+	"\a_statusB\x11\n" +
+	"\x0f_correlation_id\"L\n" +
 	"\fInstanceList\x12<\n" +
 	"\tinstances\x18\x01 \x03(\v2\x1e.com.wiggle.proto.InstanceViewR\tinstances\"4\n" +
 	"\x11InstanceIdRequest\x12\x1f\n" +
@@ -2316,7 +2353,7 @@ const file_wiggle_proto_rawDesc = "" +
 	"\x03max\x18\x03 \x01(\x05R\x03max\x12!\n" +
 	"\flease_millis\x18\x04 \x01(\x03R\vleaseMillis\x12\x1f\n" +
 	"\vwait_millis\x18\x05 \x01(\x03R\n" +
-	"waitMillis\"\xa4\x03\n" +
+	"waitMillis\"\xa0\x04\n" +
 	"\x0eTaskActivation\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x1f\n" +
 	"\vinstance_id\x18\x02 \x01(\tR\n" +
@@ -2333,7 +2370,12 @@ const file_wiggle_proto_rawDesc = "" +
 	"\vlease_owner\x18\v \x01(\tR\n" +
 	"leaseOwner\x120\n" +
 	"\acontext\x18\f \x01(\v2\x16.google.protobuf.ValueR\acontext\x12%\n" +
-	"\x0eexecution_mode\x18\r \x01(\tR\rexecutionMode\"p\n" +
+	"\x0eexecution_mode\x18\r \x01(\tR\rexecutionMode\x129\n" +
+	"\fbase_context\x18\x0e \x01(\v2\x16.google.protobuf.ValueR\vbaseContext\x12\x1d\n" +
+	"\n" +
+	"item_index\x18\x0f \x01(\x03R\titemIndex\x12 \n" +
+	"\fitem_map_key\x18\x10 \x01(\tR\n" +
+	"itemMapKey\"p\n" +
 	"\bTaskList\x126\n" +
 	"\x05tasks\x18\x01 \x03(\v2 .com.wiggle.proto.TaskActivationR\x05tasks\x12,\n" +
 	"\x12retry_after_millis\x18\x02 \x01(\x03R\x10retryAfterMillis\"\x8b\x01\n" +
@@ -2458,51 +2500,52 @@ var file_wiggle_proto_depIdxs = []int32{
 	35, // 8: com.wiggle.proto.CreateScheduleRequest.context:type_name -> google.protobuf.Value
 	20, // 9: com.wiggle.proto.ScheduleList.schedules:type_name -> com.wiggle.proto.ScheduleView
 	35, // 10: com.wiggle.proto.TaskActivation.context:type_name -> google.protobuf.Value
-	25, // 11: com.wiggle.proto.TaskList.tasks:type_name -> com.wiggle.proto.TaskActivation
-	35, // 12: com.wiggle.proto.StepResult.merge:type_name -> google.protobuf.Value
-	27, // 13: com.wiggle.proto.AdvanceRunRequest.steps:type_name -> com.wiggle.proto.StepResult
-	35, // 14: com.wiggle.proto.TaskResultRequest.result:type_name -> google.protobuf.Value
-	0,  // 15: com.wiggle.proto.WiggleControlPlane.HealthCheck:input_type -> com.wiggle.proto.Empty
-	0,  // 16: com.wiggle.proto.WiggleControlPlane.GetCluster:input_type -> com.wiggle.proto.Empty
-	0,  // 17: com.wiggle.proto.WiggleControlPlane.ListWorkflows:input_type -> com.wiggle.proto.Empty
-	5,  // 18: com.wiggle.proto.WiggleControlPlane.RegisterWorkflow:input_type -> com.wiggle.proto.WorkflowDefinition
-	8,  // 19: com.wiggle.proto.WiggleControlPlane.GetWorkflow:input_type -> com.wiggle.proto.GetWorkflowRequest
-	9,  // 20: com.wiggle.proto.WiggleControlPlane.StartInstance:input_type -> com.wiggle.proto.StartInstanceRequest
-	14, // 21: com.wiggle.proto.WiggleControlPlane.ListInstances:input_type -> com.wiggle.proto.ListInstancesRequest
-	16, // 22: com.wiggle.proto.WiggleControlPlane.GetInstance:input_type -> com.wiggle.proto.InstanceIdRequest
-	17, // 23: com.wiggle.proto.WiggleControlPlane.CancelInstance:input_type -> com.wiggle.proto.CancelInstanceRequest
-	18, // 24: com.wiggle.proto.WiggleControlPlane.SignalInstance:input_type -> com.wiggle.proto.SignalRequest
-	19, // 25: com.wiggle.proto.WiggleControlPlane.CreateSchedule:input_type -> com.wiggle.proto.CreateScheduleRequest
-	0,  // 26: com.wiggle.proto.WiggleControlPlane.ListSchedules:input_type -> com.wiggle.proto.Empty
-	22, // 27: com.wiggle.proto.WiggleControlPlane.DeleteSchedule:input_type -> com.wiggle.proto.ScheduleIdRequest
-	24, // 28: com.wiggle.proto.WiggleControlPlane.PollTasks:input_type -> com.wiggle.proto.PollRequest
-	30, // 29: com.wiggle.proto.WiggleControlPlane.CompleteTask:input_type -> com.wiggle.proto.TaskResultRequest
-	31, // 30: com.wiggle.proto.WiggleControlPlane.FailTask:input_type -> com.wiggle.proto.TaskFailureRequest
-	32, // 31: com.wiggle.proto.WiggleControlPlane.HeartbeatTask:input_type -> com.wiggle.proto.HeartbeatRequest
-	28, // 32: com.wiggle.proto.WiggleControlPlane.AdvanceRun:input_type -> com.wiggle.proto.AdvanceRunRequest
-	2,  // 33: com.wiggle.proto.WiggleControlPlane.HealthCheck:output_type -> com.wiggle.proto.HealthStatus
-	4,  // 34: com.wiggle.proto.WiggleControlPlane.GetCluster:output_type -> com.wiggle.proto.ClusterView
-	6,  // 35: com.wiggle.proto.WiggleControlPlane.ListWorkflows:output_type -> com.wiggle.proto.WorkflowNames
-	7,  // 36: com.wiggle.proto.WiggleControlPlane.RegisterWorkflow:output_type -> com.wiggle.proto.RegisterWorkflowResult
-	5,  // 37: com.wiggle.proto.WiggleControlPlane.GetWorkflow:output_type -> com.wiggle.proto.WorkflowDefinition
-	10, // 38: com.wiggle.proto.WiggleControlPlane.StartInstance:output_type -> com.wiggle.proto.StartInstanceResult
-	15, // 39: com.wiggle.proto.WiggleControlPlane.ListInstances:output_type -> com.wiggle.proto.InstanceList
-	13, // 40: com.wiggle.proto.WiggleControlPlane.GetInstance:output_type -> com.wiggle.proto.InstanceDetail
-	23, // 41: com.wiggle.proto.WiggleControlPlane.CancelInstance:output_type -> com.wiggle.proto.CancelInstanceResult
-	1,  // 42: com.wiggle.proto.WiggleControlPlane.SignalInstance:output_type -> com.wiggle.proto.Ack
-	20, // 43: com.wiggle.proto.WiggleControlPlane.CreateSchedule:output_type -> com.wiggle.proto.ScheduleView
-	21, // 44: com.wiggle.proto.WiggleControlPlane.ListSchedules:output_type -> com.wiggle.proto.ScheduleList
-	1,  // 45: com.wiggle.proto.WiggleControlPlane.DeleteSchedule:output_type -> com.wiggle.proto.Ack
-	26, // 46: com.wiggle.proto.WiggleControlPlane.PollTasks:output_type -> com.wiggle.proto.TaskList
-	1,  // 47: com.wiggle.proto.WiggleControlPlane.CompleteTask:output_type -> com.wiggle.proto.Ack
-	1,  // 48: com.wiggle.proto.WiggleControlPlane.FailTask:output_type -> com.wiggle.proto.Ack
-	33, // 49: com.wiggle.proto.WiggleControlPlane.HeartbeatTask:output_type -> com.wiggle.proto.HeartbeatResult
-	29, // 50: com.wiggle.proto.WiggleControlPlane.AdvanceRun:output_type -> com.wiggle.proto.AdvanceRunResult
-	33, // [33:51] is the sub-list for method output_type
-	15, // [15:33] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	35, // 11: com.wiggle.proto.TaskActivation.base_context:type_name -> google.protobuf.Value
+	25, // 12: com.wiggle.proto.TaskList.tasks:type_name -> com.wiggle.proto.TaskActivation
+	35, // 13: com.wiggle.proto.StepResult.merge:type_name -> google.protobuf.Value
+	27, // 14: com.wiggle.proto.AdvanceRunRequest.steps:type_name -> com.wiggle.proto.StepResult
+	35, // 15: com.wiggle.proto.TaskResultRequest.result:type_name -> google.protobuf.Value
+	0,  // 16: com.wiggle.proto.WiggleControlPlane.HealthCheck:input_type -> com.wiggle.proto.Empty
+	0,  // 17: com.wiggle.proto.WiggleControlPlane.GetCluster:input_type -> com.wiggle.proto.Empty
+	0,  // 18: com.wiggle.proto.WiggleControlPlane.ListWorkflows:input_type -> com.wiggle.proto.Empty
+	5,  // 19: com.wiggle.proto.WiggleControlPlane.RegisterWorkflow:input_type -> com.wiggle.proto.WorkflowDefinition
+	8,  // 20: com.wiggle.proto.WiggleControlPlane.GetWorkflow:input_type -> com.wiggle.proto.GetWorkflowRequest
+	9,  // 21: com.wiggle.proto.WiggleControlPlane.StartInstance:input_type -> com.wiggle.proto.StartInstanceRequest
+	14, // 22: com.wiggle.proto.WiggleControlPlane.ListInstances:input_type -> com.wiggle.proto.ListInstancesRequest
+	16, // 23: com.wiggle.proto.WiggleControlPlane.GetInstance:input_type -> com.wiggle.proto.InstanceIdRequest
+	17, // 24: com.wiggle.proto.WiggleControlPlane.CancelInstance:input_type -> com.wiggle.proto.CancelInstanceRequest
+	18, // 25: com.wiggle.proto.WiggleControlPlane.SignalInstance:input_type -> com.wiggle.proto.SignalRequest
+	19, // 26: com.wiggle.proto.WiggleControlPlane.CreateSchedule:input_type -> com.wiggle.proto.CreateScheduleRequest
+	0,  // 27: com.wiggle.proto.WiggleControlPlane.ListSchedules:input_type -> com.wiggle.proto.Empty
+	22, // 28: com.wiggle.proto.WiggleControlPlane.DeleteSchedule:input_type -> com.wiggle.proto.ScheduleIdRequest
+	24, // 29: com.wiggle.proto.WiggleControlPlane.PollTasks:input_type -> com.wiggle.proto.PollRequest
+	30, // 30: com.wiggle.proto.WiggleControlPlane.CompleteTask:input_type -> com.wiggle.proto.TaskResultRequest
+	31, // 31: com.wiggle.proto.WiggleControlPlane.FailTask:input_type -> com.wiggle.proto.TaskFailureRequest
+	32, // 32: com.wiggle.proto.WiggleControlPlane.HeartbeatTask:input_type -> com.wiggle.proto.HeartbeatRequest
+	28, // 33: com.wiggle.proto.WiggleControlPlane.AdvanceRun:input_type -> com.wiggle.proto.AdvanceRunRequest
+	2,  // 34: com.wiggle.proto.WiggleControlPlane.HealthCheck:output_type -> com.wiggle.proto.HealthStatus
+	4,  // 35: com.wiggle.proto.WiggleControlPlane.GetCluster:output_type -> com.wiggle.proto.ClusterView
+	6,  // 36: com.wiggle.proto.WiggleControlPlane.ListWorkflows:output_type -> com.wiggle.proto.WorkflowNames
+	7,  // 37: com.wiggle.proto.WiggleControlPlane.RegisterWorkflow:output_type -> com.wiggle.proto.RegisterWorkflowResult
+	5,  // 38: com.wiggle.proto.WiggleControlPlane.GetWorkflow:output_type -> com.wiggle.proto.WorkflowDefinition
+	10, // 39: com.wiggle.proto.WiggleControlPlane.StartInstance:output_type -> com.wiggle.proto.StartInstanceResult
+	15, // 40: com.wiggle.proto.WiggleControlPlane.ListInstances:output_type -> com.wiggle.proto.InstanceList
+	13, // 41: com.wiggle.proto.WiggleControlPlane.GetInstance:output_type -> com.wiggle.proto.InstanceDetail
+	23, // 42: com.wiggle.proto.WiggleControlPlane.CancelInstance:output_type -> com.wiggle.proto.CancelInstanceResult
+	1,  // 43: com.wiggle.proto.WiggleControlPlane.SignalInstance:output_type -> com.wiggle.proto.Ack
+	20, // 44: com.wiggle.proto.WiggleControlPlane.CreateSchedule:output_type -> com.wiggle.proto.ScheduleView
+	21, // 45: com.wiggle.proto.WiggleControlPlane.ListSchedules:output_type -> com.wiggle.proto.ScheduleList
+	1,  // 46: com.wiggle.proto.WiggleControlPlane.DeleteSchedule:output_type -> com.wiggle.proto.Ack
+	26, // 47: com.wiggle.proto.WiggleControlPlane.PollTasks:output_type -> com.wiggle.proto.TaskList
+	1,  // 48: com.wiggle.proto.WiggleControlPlane.CompleteTask:output_type -> com.wiggle.proto.Ack
+	1,  // 49: com.wiggle.proto.WiggleControlPlane.FailTask:output_type -> com.wiggle.proto.Ack
+	33, // 50: com.wiggle.proto.WiggleControlPlane.HeartbeatTask:output_type -> com.wiggle.proto.HeartbeatResult
+	29, // 51: com.wiggle.proto.WiggleControlPlane.AdvanceRun:output_type -> com.wiggle.proto.AdvanceRunResult
+	34, // [34:52] is the sub-list for method output_type
+	16, // [16:34] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_wiggle_proto_init() }

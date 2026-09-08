@@ -75,7 +75,7 @@ func TestForkJoin(t *testing.T) {
 			Fork{Branches: []Branch{
 				{Name: "payment", Steps: []Node{Step{Name: "charge"}}},
 				{Name: "shipping", Steps: []Node{Step{Name: "reserve"}, Step{Name: "label"}}},
-			}},
+			}, Combine: "merge"},
 			Effect{Name: "notify"},
 		},
 	}.MustCompile()
@@ -92,9 +92,35 @@ func TestForkJoin(t *testing.T) {
 	if join["expected"] != 2 {
 		t.Fatalf("join expected = %v (want 2)", join["expected"])
 	}
-	if join["next"] != nodeByName(def, "notify")["id"] {
-		t.Fatalf("flow does not continue after the join")
+	// The join flows into the mandatory combine (a TASK carrying the arm names on itemsKey),
+	// and only then into the next step -- there is no implicit fold.
+	combine := nodeByName(def, "merge")
+	if combine["kind"] != "TASK" || combine["itemsKey"] != `["payment","shipping"]` {
+		t.Fatalf("combine node wrong: %v", combine)
 	}
+	if join["next"] != combine["id"] {
+		t.Fatalf("join must flow into the combine, got %v", join["next"])
+	}
+	if combine["next"] != nodeByName(def, "notify")["id"] {
+		t.Fatalf("flow does not continue after the combine")
+	}
+}
+
+func TestForkRequiresCombine(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatalf("a Fork without Combine must fail to compile")
+		}
+	}()
+	_ = Graph{
+		Name: "no-combine",
+		Steps: []Node{
+			Fork{Branches: []Branch{
+				{Name: "a", Steps: []Node{Step{Name: "a1"}}},
+				{Name: "b", Steps: []Node{Step{Name: "b1"}}},
+			}},
+		},
+	}.MustCompile()
 }
 
 func TestDoWhileCycle(t *testing.T) {
@@ -144,17 +170,60 @@ func TestExplicitVersion(t *testing.T) {
 	}
 }
 
-func TestShallowDiff(t *testing.T) {
-	got := shallowDiff(Context{"a": 1.0, "b": 2.0}, Context{"a": 1.0, "b": 3.0, "c": 4.0})
-	want := Context{"b": 3.0, "c": 4.0}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("diff = %v, want %v", got, want)
+func TestTaskReturnIsSentWhole(t *testing.T) {
+	// The return REPLACES the context server-side, so the handler's whole return goes on the wire.
+	h := taskHandler(func(ctx Context) (Context, error) { return Context{"a": 1.0}, nil })
+	got, err := h(Context{"a": 1.0, "b": 2.0})
+	if err != nil {
+		t.Fatal(err)
 	}
-	// a dropped key becomes null
-	got = shallowDiff(Context{"a": 1.0, "b": 2.0}, Context{"a": 1.0})
-	if v, ok := got["b"]; !ok || v != nil {
-		t.Fatalf("dropped key not nulled: %v", got)
+	if !reflect.DeepEqual(got, Context{"a": 1.0}) {
+		t.Fatalf("expected the whole return, got %v", got)
 	}
+	// nil return = context untouched
+	h = taskHandler(func(ctx Context) (Context, error) { return nil, nil })
+	if got, _ := h(Context{"a": 1.0}); got != nil {
+		t.Fatalf("nil return must report nil, got %v", got)
+	}
+}
+
+func TestForEachEmitsCombine(t *testing.T) {
+	bp := Graph{
+		Name: "each",
+		Steps: []Node{
+			ForEach{Name: "per-item", Over: "items",
+				Body: []Node{Step{Name: "price"}}, Combine: "collect"},
+			Step{Name: "after"},
+		},
+	}.MustCompile()
+	def := bp.Definition
+	combine := nodeByName(def, "collect")
+	if combine["kind"] != "TASK" || combine["itemsKey"] != `"per-item"` {
+		t.Fatalf("forEach combine wrong: %v", combine)
+	}
+	var join map[string]any
+	for _, n := range def["nodes"].([]any) {
+		if n.(map[string]any)["kind"] == "JOIN" {
+			join = n.(map[string]any)
+		}
+	}
+	if join["next"] != combine["id"] {
+		t.Fatalf("join must flow into the combine")
+	}
+	if combine["next"] != nodeByName(def, "after")["id"] {
+		t.Fatalf("flow continues after the combine")
+	}
+}
+
+func TestForEachRequiresCombine(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatalf("a ForEach without Combine must fail to compile")
+		}
+	}()
+	_ = Graph{Name: "bad", Steps: []Node{
+		ForEach{Name: "x", Over: "items", Body: []Node{Step{Name: "s"}}},
+	}}.MustCompile()
 }
 
 func TestDuplicateStepErrors(t *testing.T) {
