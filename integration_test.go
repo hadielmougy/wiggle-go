@@ -141,3 +141,60 @@ func TestIntegrationReconcileRejectsUnknownStep(t *testing.T) {
 		t.Fatalf("expected reconcile to reject the unknown step")
 	}
 }
+
+// A saga: reserve declares Compensate; boom fails permanently; the engine's reverse pass runs the
+// compensator with the step's OWN input/result snapshots and the instance lands COMPENSATED.
+func TestIntegrationCompensation(t *testing.T) {
+	client, ctx := dialTest(t)
+	name := fmt.Sprintf("go-it-saga-%d", time.Now().UnixNano())
+	wf := wiggle.Graph{Name: name, Steps: []wiggle.Node{
+		wiggle.Step{Name: "reserve", Compensate: true},
+		wiggle.Step{Name: "overwrite"}, // replaces the context: proves the compensator sees SNAPSHOTS
+		wiggle.Step{Name: "boom"},
+	}}.MustCompile()
+	if _, err := client.Register(ctx, wf); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	undone := make(chan wiggle.Compensation, 1)
+	w := wiggle.NewWorker(client, "it-saga").
+		Handle(name, "reserve", func(o wiggle.Context) (wiggle.Context, error) {
+			return wiggle.Context{"orderId": o["orderId"], "reservationRef": "r-1"}, nil
+		}).
+		HandleCompensation(name, "reserve", func(c wiggle.Compensation) error {
+			undone <- c
+			return nil
+		}).
+		Handle(name, "overwrite", func(o wiggle.Context) (wiggle.Context, error) {
+			return wiggle.Context{"unrelated": true}, nil // drops reservationRef from the live context
+		}).
+		Handle(name, "boom", func(o wiggle.Context) (wiggle.Context, error) {
+			return nil, wiggle.Permanent("downstream exploded")
+		})
+	if err := w.Start(ctx); err != nil {
+		t.Fatalf("start worker: %v", err)
+	}
+	defer w.Stop()
+
+	id, err := client.Start(ctx, wf, wiggle.Context{"orderId": "o-9"})
+	if err != nil {
+		t.Fatalf("start instance: %v", err)
+	}
+	v, err := client.AwaitCompletion(ctx, id, 30*time.Second)
+	if err != nil {
+		t.Fatalf("await: %v", err)
+	}
+	if v.Status != "COMPENSATED" {
+		t.Fatalf("status = %s (error %q)", v.Status, v.Error)
+	}
+	select {
+	case c := <-undone:
+		if c.Result["reservationRef"] != "r-1" {
+			t.Fatalf("compensator must see the step's own result snapshot, got %v", c.Result)
+		}
+		if c.Input["orderId"] != "o-9" {
+			t.Fatalf("compensator must see the step's input snapshot, got %v", c.Input)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("compensator never ran")
+	}
+}

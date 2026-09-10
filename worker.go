@@ -118,6 +118,21 @@ func (w *Worker) HandleCombine(workflow, step string, fn Activity) *Worker {
 	return w.bind(workflow, step, "COMBINE", combineHandler(fn))
 }
 
+// HandleCompensation binds the undo of a compensable step (one declared Compensate in the
+// topology). fn runs in the reverse pass after the instance fails, receiving the step's
+// input/result snapshots. Start refuses a worker that serves a compensable step's forward handler
+// without also binding its compensator — the undo task is minted on the same queue, and a worker
+// that can do but not undo would strand the reverse pass.
+func (w *Worker) HandleCompensation(workflow, step string, fn Compensator) *Worker {
+	activity := workflow + "#" + step + "#compensate"
+	if _, dup := w.handlers[activity]; dup {
+		panic(fmt.Sprintf("duplicate compensator for activity %q", activity))
+	}
+	w.handlers[activity] = compensationHandler(fn)
+	w.claims = append(w.claims, claim{workflow, step, "COMPENSATE"})
+	return w
+}
+
 // HandleItem binds one step of a forEach body: fn receives the frozen pre-forEach context (base,
 // read-only) and the item's current value, and its return replaces that value (nil = untouched).
 func (w *Worker) HandleItem(workflow, step string, fn ItemActivity) *Worker {
@@ -211,7 +226,13 @@ func (w *Worker) reconcile(ctx context.Context) error {
 			k, _ := node["kind"].(string)
 			itemsKey, _ := node["itemsKey"].(string)
 			isCombine := k == "TASK" && itemsKey != ""
+			compensable, _ := node["compensable"].(bool)
 			switch {
+			case c.kind == "COMPENSATE" && (k != "TASK" || isCombine || !compensable):
+				return fmt.Errorf("step %q of workflow %q is not declared Compensate in the "+
+					"topology; HandleCompensation binds only compensable steps", c.step, wf)
+			case c.kind == "COMPENSATE":
+				// ok: a compensator on a compensable step
 			case c.kind == "COMBINE" && !isCombine:
 				return fmt.Errorf("activity %q is not a fork combine; bind it with Handle()", activity)
 			case c.kind == "COMBINE":
@@ -232,6 +253,27 @@ func (w *Worker) reconcile(ctx context.Context) error {
 				queue = wf
 			}
 			w.queues[queue] = true
+		}
+		// Pairing: a forward handler on a compensable step requires its compensator here too —
+		// the undo task lands on the same queue this worker polls, so "can do but not undo"
+		// would strand the reverse pass at claim time.
+		compensated := map[string]bool{}
+		for _, c := range claims {
+			if c.kind == "COMPENSATE" {
+				compensated[c.step] = true
+			}
+		}
+		for _, c := range claims {
+			if c.kind != "TASK" || compensated[c.step] {
+				continue
+			}
+			if node, ok := nodes[c.workflow+"#"+c.step]; ok {
+				if compensable, _ := node["compensable"].(bool); compensable {
+					return fmt.Errorf("step %q of workflow %q is declared Compensate but this "+
+						"worker binds no compensator; add HandleCompensation(%q, %q, ...)",
+						c.step, wf, wf, c.step)
+				}
+			}
 		}
 	}
 	for _, set := range w.handlerSets {

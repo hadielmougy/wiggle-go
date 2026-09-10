@@ -16,8 +16,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// TERMINAL are the instance statuses that end a run.
-var terminal = map[string]bool{"COMPLETED": true, "FAILED": true, "CANCELLED": true}
+// TERMINAL are the instance statuses that end a run. COMPENSATING is NOT terminal: the reverse
+// pass is still running its compensators; it settles as COMPENSATED or COMPENSATION_FAILED.
+var terminal = map[string]bool{"COMPLETED": true, "FAILED": true, "CANCELLED": true,
+	"COMPENSATED": true, "COMPENSATION_FAILED": true}
 
 // callReady makes the worker-critical RPCs (register, get-workflow, poll, complete, fail, heartbeat)
 // wait for the server to become reachable instead of failing fast with UNAVAILABLE -- so a worker

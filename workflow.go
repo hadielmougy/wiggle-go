@@ -78,18 +78,25 @@ type Graph struct {
 type Node interface{ isNode() }
 
 // Step is a unit of work run on a worker; its handler returns the new context.
+//
+// Compensate declares the step compensable: if the instance later fails, the engine runs the
+// step's compensator (bound with Worker.HandleCompensation or a Compensate<Step> method) in the
+// reverse pass, handing it the input/result context snapshots captured at this step's completion.
 type Step struct {
-	Name  string
-	Queue string // "" = the default queue
-	Retry Retry  // zero = default
+	Name       string
+	Queue      string // "" = the default queue
+	Retry      Retry  // zero = default
+	Compensate bool   // declare an undo; a compensator MUST be bound for this step
 }
 
 // Effect is a step run for its side effect only; the context is unchanged. (Topologically identical
-// to a Step -- the difference is only in the bound handler.)
+// to a Step -- the difference is only in the bound handler.) Compensate declares an undo exactly
+// as on a Step (for an effect the two snapshots are the same context).
 type Effect struct {
-	Name  string
-	Queue string
-	Retry Retry
+	Name       string
+	Queue      string
+	Retry      Retry
+	Compensate bool
 }
 
 // Gate continues only while its predicate holds; false ends the instance as gated:<name> (or, inside
@@ -376,9 +383,17 @@ func (b *builder) appendNodes(nodes []Node) {
 func (b *builder) appendNode(n Node) {
 	switch node := n.(type) {
 	case Step:
-		b.chain(b.g.addWorker("TASK", node.Name, node.Queue, node.Retry))
+		id := b.g.addWorker("TASK", node.Name, node.Queue, node.Retry)
+		if node.Compensate {
+			b.g.nodes[id]["compensable"] = true
+		}
+		b.chain(id)
 	case Effect:
-		b.chain(b.g.addWorker("TASK", node.Name, node.Queue, node.Retry))
+		id := b.g.addWorker("TASK", node.Name, node.Queue, node.Retry)
+		if node.Compensate {
+			b.g.nodes[id]["compensable"] = true
+		}
+		b.chain(id)
 	case Gate:
 		id := b.g.addWorker("PREDICATE", node.Name, node.Queue, node.Retry)
 		b.attach(id)
