@@ -142,6 +142,27 @@ func TestDoWhileCycle(t *testing.T) {
 	if cond["altNext"] != nodeByName(def, "finalize")["id"] {
 		t.Fatalf("false edge does not continue")
 	}
+	if cond["loopBudget"] != -1 {
+		t.Fatalf("an unstated budget must serialize the engine-default sentinel -1, got %v", cond["loopBudget"])
+	}
+}
+
+func TestDoWhileExplicitBudget(t *testing.T) {
+	bp := Graph{
+		Name: "wf",
+		Steps: []Node{
+			DoWhile{While: "has-more", MaxIterations: 500, Body: []Node{Step{Name: "fetch"}}},
+		},
+	}.MustCompile()
+	cond := nodeByName(bp.Definition, "has-more")
+	if cond["loopBudget"] != 500 {
+		t.Fatalf("explicit budget must serialize, got %v", cond["loopBudget"])
+	}
+	// plain gates carry no budget at all
+	bp2 := Graph{Name: "wf", Steps: []Node{Gate{Name: "g"}, Step{Name: "a"}}}.MustCompile()
+	if _, has := nodeByName(bp2.Definition, "g")["loopBudget"]; has {
+		t.Fatalf("a plain gate must not carry a loopBudget")
+	}
 }
 
 func TestAwaitSignalEscalation(t *testing.T) {
