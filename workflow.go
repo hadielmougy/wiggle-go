@@ -165,9 +165,15 @@ type Choose struct {
 }
 
 // DoWhile runs Body once, then repeats while the While predicate holds (Body runs at least once).
+//
+// Every loop is budgeted: the While guard may evaluate true at most MaxIterations times, after
+// which the instance FAILS with a clear error — an unbounded loop with a buggy condition would
+// hot-spin workers and the database. Zero means the engine default (WIGGLE_LOOP_MAX_ITERATIONS,
+// 10,000); set it explicitly when a loop legitimately needs more.
 type DoWhile struct {
-	While string
-	Body  []Node
+	While         string
+	MaxIterations int
+	Body          []Node
 }
 
 func (Step) isNode()        {}
@@ -463,11 +469,19 @@ func (b *builder) appendNode(n Node) {
 		if sub.start == "" {
 			fail("do_while body defines no steps")
 		}
+		if node.MaxIterations < 0 {
+			fail("do_while %q: MaxIterations must be positive (0 = engine default)", node.While)
+		}
 		condID := b.g.addWorker("PREDICATE", node.While, "", Retry{})
+		budget := node.MaxIterations
+		if budget == 0 {
+			budget = -1 // engine default — mirrors the Java client's two-arg doWhile
+		}
+		b.g.nodes[condID]["loopBudget"] = budget
 		b.attach(sub.start)
 		sub.wireOpenTo(condID)
 		b.g.wire(condID, "next", sub.start) // true: loop back
-		b.open = []openEnd{{condID, "alt"}}  // false: continue
+		b.open = []openEnd{{condID, "alt"}} // false: continue
 	default:
 		fail("unknown node type %T", n)
 	}
