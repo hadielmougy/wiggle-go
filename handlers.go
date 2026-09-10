@@ -18,6 +18,15 @@ import (
 //
 // Method names match step names regardless of case style: InStock, and a step named "in-stock", both
 // fold to the same key. Methods with any other shape are ignored, so helpers can live on the struct.
+//
+// A step declared Compensate in the topology pairs with a compensator method named
+// Compensate<Step> with the shape
+//
+//	func(Compensation) error
+//
+// (CompensateCharge undoes the step "charge"). The pairing is checked both ways at bind time: a
+// compensable step served without a compensator, or a Compensate<X> method whose X is not a
+// compensable step, refuses to bind.
 
 // reflection types compared against method signatures (Context is an alias for map[string]any).
 var (
@@ -36,8 +45,14 @@ type handlerCandidate struct {
 }
 
 type handlerSet struct {
-	workflow   string
-	candidates map[string]handlerCandidate // keyed by canonical (case-folded) name
+	workflow     string
+	candidates   map[string]handlerCandidate // keyed by canonical (case-folded) name
+	compensators map[string]compCandidate    // keyed by canonical TARGET step name
+}
+
+type compCandidate struct {
+	name string // the exported method name, for error messages
+	fn   Compensator
 }
 
 // canonicalName folds a name to a case/style-independent key: its lowercase alphanumerics, in order.
@@ -63,11 +78,22 @@ func (w *Worker) RegisterHandlers(workflow string, handlers any) *Worker {
 	if handlers == nil {
 		panic("RegisterHandlers: handlers is nil")
 	}
-	set := handlerSet{workflow: workflow, candidates: map[string]handlerCandidate{}}
+	set := handlerSet{workflow: workflow,
+		candidates:   map[string]handlerCandidate{},
+		compensators: map[string]compCandidate{}}
 	v := reflect.ValueOf(handlers)
 	t := v.Type()
 	for i := 0; i < t.NumMethod(); i++ {
 		name := t.Method(i).Name
+		if target, fn, isComp := asCompensatorCandidate(name, v.Method(i)); isComp {
+			canon := canonicalName(target)
+			if prev, dup := set.compensators[canon]; dup {
+				panic(fmt.Sprintf("RegisterHandlers: compensators %q and %q both target step %q",
+					prev.name, name, canon))
+			}
+			set.compensators[canon] = compCandidate{name, fn}
+			continue
+		}
 		cand, ok := asHandlerCandidate(name, v.Method(i))
 		if !ok {
 			cand, ok = asItemCandidate(name, v.Method(i))
@@ -85,7 +111,7 @@ func (w *Worker) RegisterHandlers(workflow string, handlers any) *Worker {
 		}
 		set.candidates[canon] = cand
 	}
-	if len(set.candidates) == 0 {
+	if len(set.candidates) == 0 && len(set.compensators) == 0 {
 		panic(fmt.Sprintf("RegisterHandlers: %T exposes no handler methods (want a method shaped like "+
 			"func(Context)(Context,error), func(Context)(bool,error), or func(Context)error)", handlers))
 	}
@@ -125,6 +151,35 @@ func asItemCandidate(name string, m reflect.Value) (handlerCandidate, bool) {
 	}
 	fn := m.Interface().(func(Context, any) (any, error))
 	return handlerCandidate{name: name, kind: "TASK", item: fn}, true
+}
+
+// asCompensatorCandidate matches the compensator convention: a method named Compensate<Step> with
+// the shape func(Compensation) error. Compensation-shaped methods under any other name are ignored
+// like helpers — a forgotten binding is still caught by the both-ways pairing check at bind time.
+func asCompensatorCandidate(name string, m reflect.Value) (string, Compensator, bool) {
+	const prefix = "Compensate"
+	if !strings.HasPrefix(name, prefix) || len(name) == len(prefix) {
+		return "", nil, false
+	}
+	mt := m.Type()
+	if mt.NumIn() != 1 || mt.In(0) != reflect.TypeOf(Compensation{}) {
+		return "", nil, false
+	}
+	if mt.NumOut() != 1 || mt.Out(0) != reflectErrType {
+		return "", nil, false
+	}
+	return name[len(prefix):], m.Interface().(func(Compensation) error), true
+}
+
+// compensationHandler adapts a Compensator to the internal handler shape: the engine stages the
+// two snapshots as the activation context {"input": ..., "result": ...}; split them out. The
+// return is nil — an undo never changes the (already doomed) instance context.
+func compensationHandler(fn Compensator) activityHandler {
+	return func(ctx Context) (any, error) {
+		input, _ := ctx["input"].(map[string]any)
+		result, _ := ctx["result"].(map[string]any)
+		return nil, fn(Compensation{Input: input, Result: result})
+	}
 }
 
 // taskHandler wraps a user Activity into the internal handler. The return is the step's COMPLETE
@@ -256,7 +311,55 @@ func bindHandlerSet(graph map[string]any, set handlerSet) ([]binding, error) {
 		}
 		bindings = append(bindings, binding{activity: activity, step: step, queue: queue, handler: handler})
 	}
+	// Compensators bind under "<activity>#compensate"; the pairing is checked BOTH ways — a
+	// Compensate<X> targeting a non-compensable (or missing) step is a lie, and a compensable
+	// step served forward without its undo would strand the engine's reverse pass.
+	for _, canon := range sortedCompKeys(set.compensators) {
+		comp := set.compensators[canon]
+		node, ok := nodeByCanon[canon]
+		if !ok {
+			return nil, fmt.Errorf("compensator %q targets no step in workflow %q (available: %v)",
+				comp.name, set.workflow, sortedValues(stepByCanon))
+		}
+		step := stepByCanon[canon]
+		kind, _ := node["kind"].(string)
+		itemsKey, _ := node["itemsKey"].(string)
+		compensable, _ := node["compensable"].(bool)
+		if kind != "TASK" || itemsKey != "" || !compensable {
+			return nil, fmt.Errorf("compensator %q targets step %q of workflow %q, which is not "+
+				"declared Compensate in the topology", comp.name, step, set.workflow)
+		}
+		queue, _ := node["queue"].(string)
+		if queue == "" {
+			queue = set.workflow
+		}
+		bindings = append(bindings, binding{activity: set.workflow + "#" + step + "#compensate",
+			step: step, queue: queue, handler: compensationHandler(comp.fn)})
+	}
+	for _, canon := range sortedKeys(set.candidates) {
+		node := nodeByCanon[canon]
+		if node == nil {
+			continue // unmatched candidates already errored above
+		}
+		compensable, _ := node["compensable"].(bool)
+		if kind, _ := node["kind"].(string); compensable && kind == "TASK" {
+			if _, has := set.compensators[canon]; !has {
+				return nil, fmt.Errorf("step %q of workflow %q is declared Compensate but the "+
+					"handler struct has no Compensate%s method (func(Compensation) error)",
+					stepByCanon[canon], set.workflow, set.candidates[canon].name)
+			}
+		}
+	}
 	return bindings, nil
+}
+
+func sortedCompKeys(m map[string]compCandidate) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func sortedKeys(m map[string]handlerCandidate) []string {

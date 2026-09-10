@@ -105,8 +105,8 @@ wf := wiggle.Graph{
 
 | Node | Meaning |
 |---|---|
-| `Step{Name, Queue, Retry}` | a task run on a worker (`Handle`); only changed context keys are merged back |
-| `Effect{Name, Queue, Retry}` | a side-effect step (`HandleEffect`); context unchanged |
+| `Step{Name, Queue, Retry, Compensate}` | a task run on a worker (`Handle`); only changed context keys are merged back. `Compensate: true` declares an undo run in the reverse pass if the instance later fails |
+| `Effect{Name, Queue, Retry, Compensate}` | a side-effect step (`HandleEffect`); context unchanged |
 | `Gate{Name, Queue, Retry}` | a predicate (`HandleGate`); false ends the instance as `gated:<name>` |
 | `Fork{Branches, Combine}` | run branches in parallel on isolated context copies, then rejoin at the **mandatory** `Combine` step (`HandleCombine`) — no implicit fold |
 | `ForEach{Name, Over, Body, Combine}` | runtime fan-out: one **isolated** branch per element of the list (or map) at `Over`. **The element IS the item's context** — body steps are bound with `HandleItem(base, item)` and their return replaces the item's value (scalars included). The **mandatory** `Combine` handler receives every item's final value collected under `Name` (a list, or a map keyed like the input) and returns the complete post-join context |
@@ -139,6 +139,27 @@ worker.HandleCombine("order", "merge", func(ctx wiggle.Context) (wiggle.Context,
 Per-step: `Queue` (defaults to `DefaultQueue`, else the workflow name) and `Retry`
 (`RetryExponential/RetryFixed/RetryNone/RetryForever`). `Branch{Name, Steps}` and `Case{When, Then}`
 are themselves declarative slices of `Node`, so branches and bodies nest arbitrarily.
+
+## Compensation (sagas)
+
+A step declared `Compensate: true` is undone when the instance later fails: the engine runs the
+step's **compensator** in the reverse pass (newest-completed first) as a real durable task, handing
+it the step's **input/result context snapshots** captured at completion — not the instance's latest
+context, which a later step may have replaced. The instance settles `COMPENSATED` (or
+`COMPENSATION_FAILED` if an undo exhausts its retries).
+
+```go
+w.Handle("order", "reserve", reserve).
+    HandleCompensation("order", "reserve", func(c wiggle.Compensation) error {
+        return releaseReservation(c.Result["reservationRef"].(string)) // idempotent!
+    })
+```
+
+On a `RegisterHandlers` struct the compensator is a method named `Compensate<Step>` with the shape
+`func(wiggle.Compensation) error` (`CompensateReserve` undoes `reserve`). The pairing is checked
+both ways at start: a compensable step served without its compensator — or a compensator targeting
+a non-compensable step — refuses to bind. Compensators are at-least-once like every handler; make
+them idempotent.
 
 ## Name-only binding (interop)
 

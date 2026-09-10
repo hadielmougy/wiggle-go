@@ -263,3 +263,27 @@ func findByID(def map[string]any, id string) map[string]any {
 	}
 	return nil
 }
+
+func TestCompensateFlagSerializes(t *testing.T) {
+	def := Graph{Name: "saga", Steps: []Node{
+		Step{Name: "reserve", Compensate: true},
+		Effect{Name: "audit", Compensate: true},
+		Step{Name: "plain"},
+	}}.MustCompile().Definition
+	byName := map[string]map[string]any{}
+	for _, n := range asList(def["nodes"]) {
+		node := n.(map[string]any)
+		name, _ := node["name"].(string)
+		byName[name] = node
+	}
+	if byName["reserve"]["compensable"] != true {
+		t.Fatalf("Step.Compensate must serialize compensable:true, got %v", byName["reserve"])
+	}
+	if byName["audit"]["compensable"] != true {
+		t.Fatalf("Effect.Compensate must serialize compensable:true, got %v", byName["audit"])
+	}
+	// Absent (not false) when unset — the field must not disturb existing content hashes.
+	if _, present := byName["plain"]["compensable"]; present {
+		t.Fatalf("an unset Compensate must not serialize at all, got %v", byName["plain"])
+	}
+}

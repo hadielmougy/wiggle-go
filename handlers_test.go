@@ -199,3 +199,89 @@ func TestBindRejectsNonActivityCombine(t *testing.T) {
 		t.Fatalf("a combine bound to a non-Activity shape must fail")
 	}
 }
+
+// ---- compensation pairing (mirrors Java HandlerBinder / SagaCompensationTest bind rules) ----
+
+func sagaGraph() map[string]any {
+	return Graph{Name: "saga", Steps: []Node{
+		Step{Name: "reserve", Compensate: true},
+		Step{Name: "charge", Queue: "payments"},
+	}}.MustCompile().Definition
+}
+
+type sagaHandlers struct{ got *Compensation }
+
+func (h sagaHandlers) Reserve(o Context) (Context, error) { return o, nil }
+func (h sagaHandlers) Charge(o Context) (Context, error)  { return o, nil }
+func (h sagaHandlers) CompensateReserve(c Compensation) error {
+	*h.got = c
+	return nil
+}
+
+func TestCompensatorBindsAndSplitsSnapshots(t *testing.T) {
+	var got Compensation
+	w := NewWorker(nil, "w").RegisterHandlers("saga", sagaHandlers{got: &got})
+	bindings, err := bindHandlerSet(sagaGraph(), w.handlerSets[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	byActivity := map[string]binding{}
+	for _, b := range bindings {
+		byActivity[b.activity] = b
+	}
+	comp, ok := byActivity["saga#reserve#compensate"]
+	if !ok {
+		t.Fatalf("compensator not bound; have %v", bindings)
+	}
+	if comp.queue != "saga" {
+		t.Fatalf("compensator inherits the forward step's queue, got %q", comp.queue)
+	}
+	// The engine stages the two snapshots as {"input":..., "result":...}; the wrapper splits them.
+	out, err := comp.handler(Context{
+		"input":  map[string]any{"orderId": "o1"},
+		"result": map[string]any{"orderId": "o1", "reservationRef": "r-9"},
+	})
+	if err != nil || out != nil {
+		t.Fatalf("compensator handler = %v, %v (want nil, nil)", out, err)
+	}
+	if got.Input["orderId"] != "o1" || got.Result["reservationRef"] != "r-9" {
+		t.Fatalf("snapshots not split: %+v", got)
+	}
+}
+
+type undoLessHandlers struct{}
+
+func (undoLessHandlers) Reserve(o Context) (Context, error) { return o, nil }
+func (undoLessHandlers) Charge(o Context) (Context, error)  { return o, nil }
+
+func TestCompensableStepWithoutCompensatorRefusesToBind(t *testing.T) {
+	w := NewWorker(nil, "w").RegisterHandlers("saga", undoLessHandlers{})
+	_, err := bindHandlerSet(sagaGraph(), w.handlerSets[0])
+	if err == nil || !strings.Contains(err.Error(), "Compensate") {
+		t.Fatalf("want missing-compensator error, got %v", err)
+	}
+}
+
+type strayCompensator struct{}
+
+func (strayCompensator) Reserve(o Context) (Context, error) { return o, nil }
+func (strayCompensator) Charge(o Context) (Context, error)  { return o, nil }
+func (strayCompensator) CompensateReserve(Compensation) error { return nil }
+func (strayCompensator) CompensateCharge(Compensation) error  { return nil } // charge is NOT compensable
+
+func TestCompensatorOnNonCompensableStepRefusesToBind(t *testing.T) {
+	w := NewWorker(nil, "w").RegisterHandlers("saga", strayCompensator{})
+	_, err := bindHandlerSet(sagaGraph(), w.handlerSets[0])
+	if err == nil || !strings.Contains(err.Error(), "CompensateCharge") {
+		t.Fatalf("want stray-compensator error, got %v", err)
+	}
+}
+
+func TestHandleCompensationRegistersTheUndoActivity(t *testing.T) {
+	w := NewWorker(nil, "w").
+		Handle("saga", "reserve", func(c Context) (Context, error) { return c, nil }).
+		HandleCompensation("saga", "reserve", func(Compensation) error { return nil })
+	if _, ok := w.handlers["saga#reserve#compensate"]; !ok {
+		t.Fatalf("HandleCompensation must register the #compensate activity, have %v", keys(w.handlers))
+	}
+}

@@ -34,6 +34,25 @@ type PermanentError struct{ Msg string }
 
 func (e *PermanentError) Error() string { return e.Msg }
 
+// Compensation carries both context snapshots of the step being undone, captured by the engine at
+// the step's completion — NOT read from the instance's latest context, which a later step may have
+// replaced (a step's return replaces the context wholesale). Result is the primary snapshot for
+// most undos (the step's own products — a payment ref — live there); Input serves
+// restore-previous-value undos and undo-only data (an idempotency key derived from the input), so
+// nothing has to be smuggled through the business context just to reach the compensator.
+type Compensation struct {
+	Input  Context // the context as the step received it
+	Result Context // the context as the step left it — the post-step snapshot
+}
+
+// Compensator undoes a compensable step's external effect. It runs in the reverse pass after the
+// instance fails, newest-completed first, as a real durable task with the normal retry machinery —
+// and, like every handler, at-least-once: make it idempotent (refund by an idempotency key, not
+// blindly). Returning a *PermanentError (or exhausting retries) parks the instance
+// COMPENSATION_FAILED. Bind it with Worker.HandleCompensation, or on a RegisterHandlers struct as
+// a method named Compensate<Step> with this shape.
+type Compensator func(Compensation) error
+
 // Permanent builds a non-retryable failure from a formatted message.
 func Permanent(format string, args ...any) *PermanentError {
 	return &PermanentError{Msg: fmt.Sprintf(format, args...)}
