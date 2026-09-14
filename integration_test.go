@@ -35,7 +35,7 @@ func dialTest(t *testing.T) (*wiggle.Client, context.Context) {
 }
 
 // order is the declarative topology (no handlers). Each test binds handlers by name (bindOrder).
-func order(name string) *wiggle.Blueprint {
+func order(name string) *wiggle.FlowSpec {
 	return wiggle.Graph{
 		Name: name,
 		Steps: []wiggle.Node{
@@ -90,7 +90,7 @@ func TestIntegrationFullRun(t *testing.T) {
 	}
 }
 
-// A worker that never saw the blueprint implements every step by (workflow, step) name; Start
+// A worker that never saw the flowSpec implements every step by (workflow, step) name; Start
 // reconciles against the registered graph and discovers the payments queue.
 func TestIntegrationNameOnlyBinding(t *testing.T) {
 	client, ctx := dialTest(t)
