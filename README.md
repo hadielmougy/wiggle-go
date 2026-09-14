@@ -35,7 +35,7 @@ func main() {
 	ctx := context.Background()
 
 	// The topology is declarative data -- a Graph that mirrors the YAML/graph schema. Compile it to a
-	// *Blueprint you register. Handlers are bound separately, by name (below).
+	// *FlowSpec you register. Handlers are bound separately, by name (below).
 	wf := wiggle.Graph{
 		Name: "order",
 		Steps: []wiggle.Node{
@@ -79,7 +79,7 @@ WIGGLE_URL=localhost:8080 go run ./examples/order
 ## Topology
 
 A workflow's shape is declarative Go data — a `Graph` whose `Steps` is a slice of `Node` values that
-mirror the YAML/graph schema. `Compile()` turns it into a `*Blueprint` you register (it validates the
+mirror the YAML/graph schema. `Compile()` turns it into a `*FlowSpec` you register (it validates the
 shape and returns an error); `MustCompile()` panics instead, for a literal known-good at build time.
 Handlers are **not** part of the topology — a worker binds them separately, by name (see below).
 
@@ -217,7 +217,7 @@ methods use pointer receivers.
 `context.Context`:
 
 ```
-Register(ctx, *Blueprint) (int, error)
+Register(ctx, *FlowSpec) (int, error)
 GetWorkflow(ctx, name) (map[string]any, error)
 Start(ctx, workflowOrName, context, opts…) (id, error)   // WithVersion, WithCorrelationID
 Instance(ctx, id) (*InstanceView, error)

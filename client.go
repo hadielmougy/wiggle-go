@@ -100,7 +100,7 @@ func stripScheme(target string) string {
 // ---- workflows & instances ----
 
 // Register registers a workflow definition and returns its version (idempotent for the same graph).
-func (c *Client) Register(ctx context.Context, bp *Blueprint) (int, error) {
+func (c *Client) Register(ctx context.Context, bp *FlowSpec) (int, error) {
 	s, err := toStruct(bp.Definition)
 	if err != nil {
 		return 0, fmt.Errorf("encode definition: %w", err)
@@ -138,7 +138,7 @@ func WithCorrelationID(id string) StartOption {
 	return func(r *pb.StartInstanceRequest) { r.CorrelationId = &id }
 }
 
-// Start starts an instance and returns its id. workflow may be a name or a *Blueprint.
+// Start starts an instance and returns its id. workflow may be a name or a *FlowSpec.
 func (c *Client) Start(ctx context.Context, workflow any, initial Context, opts ...StartOption) (string, error) {
 	name, err := workflowName(workflow)
 	if err != nil {
@@ -163,12 +163,12 @@ func workflowName(workflow any) (string, error) {
 	switch w := workflow.(type) {
 	case string:
 		return w, nil
-	case *Blueprint:
+	case *FlowSpec:
 		return w.Name, nil
-	case Blueprint:
+	case FlowSpec:
 		return w.Name, nil
 	default:
-		return "", fmt.Errorf("workflow must be a name or *Blueprint, got %T", workflow)
+		return "", fmt.Errorf("workflow must be a name or *FlowSpec, got %T", workflow)
 	}
 }
 

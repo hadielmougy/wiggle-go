@@ -9,9 +9,9 @@ import (
 	"time"
 )
 
-// Blueprint is a compiled workflow topology: the graph sent to the server. Step handlers are NOT
+// FlowSpec is a compiled workflow topology: the graph sent to the server. Step handlers are NOT
 // part of it -- they are bound by name on a worker (see Worker.Handle).
-type Blueprint struct {
+type FlowSpec struct {
 	Name       string
 	Version    int
 	Definition map[string]any
@@ -63,7 +63,7 @@ func (r Retry) toJSON() map[string]any {
 //
 // A workflow is described as data, not a fluent chain: a Graph with an ordered list of Nodes. Each
 // Node is one of the concrete types below (Task, Gate, Fork, ...). Compile() turns it into a
-// Blueprint. Handlers are implemented separately and bound by name (Worker.Handle).
+// FlowSpec. Handlers are implemented separately and bound by name (Worker.Handle).
 
 // Graph is the declarative description of a workflow's topology.
 type Graph struct {
@@ -567,10 +567,10 @@ func (e compileError) Error() string { return string(e) }
 
 func fail(format string, args ...any) { panic(compileError(fmt.Sprintf(format, args...))) }
 
-// Compile turns the declarative Graph into a Blueprint (topology only). It returns an error -- never
+// Compile turns the declarative Graph into a FlowSpec (topology only). It returns an error -- never
 // panics to the caller -- for an invalid topology (duplicate name, fork with < 2 branches, an empty
 // branch/body, a bad choose, escalation without a timeout).
-func (g Graph) Compile() (bp *Blueprint, err error) {
+func (g Graph) Compile() (bp *FlowSpec, err error) {
 	if g.Name == "" {
 		return nil, errors.New("workflow name is required")
 	}
@@ -629,12 +629,12 @@ func (g Graph) Compile() (bp *Blueprint, err error) {
 	}
 	def["version"] = version
 
-	return &Blueprint{Name: g.Name, Version: version, Definition: def, Queues: queues}, nil
+	return &FlowSpec{Name: g.Name, Version: version, Definition: def, Queues: queues}, nil
 }
 
 // MustCompile is Compile that panics on error -- convenient for a topology defined as a literal that
 // is known-good at build time.
-func (g Graph) MustCompile() *Blueprint {
+func (g Graph) MustCompile() *FlowSpec {
 	bp, err := g.Compile()
 	if err != nil {
 		panic(err)
