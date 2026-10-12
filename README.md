@@ -111,7 +111,7 @@ wf := wiggle.Graph{
 | `Fork{Branches, Combine}` | run branches in parallel on isolated context copies, then rejoin at the **mandatory** `Combine` step (`HandleCombine`) — no implicit fold |
 | `ForEach{Name, ItemsKey, Body, Combine}` | runtime fan-out: one **isolated** branch per element of the list (or map) at `ItemsKey`. **The element IS the item's context** — body steps are bound with `HandleItem(base, item)` and their return replaces the item's value (scalars included). The **mandatory** `Combine` handler receives every item's final value collected under `Name` (a list, or a map keyed like the input) and returns the complete post-join context |
 | `Choose{Cases}` | exclusive choice: the first `Case` whose `When` guard holds runs; a `Case` with no `When` is the otherwise (last) |
-| `DoWhile{While, Body}` | run `Body`, then repeat while the `While` predicate holds (body runs at least once) |
+| `DoWhile{While, MaxIterations, Body}` | run `Body`, then repeat while the `While` predicate holds (body runs at least once). The guard may hold at most `MaxIterations` times (0 = the engine default, 10,000) before the instance fails |
 | `SubWorkflow{Name, Workflow}` | run another workflow as a child; its result merges back |
 | `Sleep{Name, For}` | server-side timer (`For` is a `time.Duration`); no worker is held |
 | `AwaitSignal{Name, Timeout, Escalation}` | wait for a signal (`Client.Signal`); on `Timeout`, fail — or run `Escalation` and rejoin |
@@ -140,7 +140,8 @@ worker.HandleCombine("order", "merge", func(ctx wiggle.Context) (wiggle.Context,
 
 Per-step: `Queue` (defaults to `DefaultQueue`, else the workflow name) and `Retry`, a
 `RetryPolicy` (`RetryExponential/RetryFixed/RetryNone/RetryForever`). `Branch{Name, Steps}` and `Case{When, Then}`
-are themselves declarative slices of `Node`, so branches and bodies nest arbitrarily.
+are themselves declarative slices of `Node`, so branches and bodies nest arbitrarily. A graph may
+also declare `Attributes` for [queue criteria](#queue-criteria) to test.
 
 ## Compensation (sagas)
 
@@ -182,6 +183,31 @@ the worker reconciles: it verifies each step exists and is the right kind (a typ
 available step names) and discovers which queue each step polls. Pass `WithAwaitRegistration(d)` to ride
 out a registration race.
 
+| Binder | Handler shape | Binds |
+|---|---|---|
+| `Handle` | `func(Context) (Context, error)` | a task (`Step`) |
+| `HandleStep` | `func(*StepRun, Context) (Context, error)` | a task that also reads its step metadata |
+| `HandleGate` | `func(Context) (bool, error)` | a predicate (`Gate`, `Choose` guard, `DoWhile` condition) |
+| `HandleEffect` | `func(Context) error` | a side effect (`Effect`) |
+| `HandleCombine` / `HandleCombineStep` | as `Handle` / `HandleStep` | a fork, forEach or spawning step's combine |
+| `HandleItem` | `func(base Context, item any) (any, error)` | a step of a `ForEach` body |
+| `HandleCompensation` | `func(Compensation) error` | the undo of a compensable step |
+
+A handler's error is retried under the step's `RetryPolicy`; return `wiggle.Permanent(format, args…)`
+to fail the step without a retry.
+
+### Worker options
+
+`NewWorker(client, id, opts…)` takes:
+
+| Option | Default | Meaning |
+|---|---|---|
+| `WithConcurrency(n)` | NumCPU | the most steps in flight |
+| `WithLease(d)` | 30s | how long a claimed step may run before the server reclaims it |
+| `WithQueues(names…)` | every queue it learns about | serve only these queues |
+| `WithCriteria(c…)` | none | claim only the tasks [queue criteria](#queue-criteria) hold for; replaces `WithQueues` |
+| `WithAwaitRegistration(d)` | 0 (fail fast) | wait up to `d` for a bound workflow's graph to be registered |
+
 ### A struct of handlers: `RegisterHandler`
 
 Instead of one `Handle(...)` call per step, hand the worker a struct whose methods *are* the steps —
@@ -220,7 +246,7 @@ methods use pointer receivers.
 `context.Context`:
 
 ```
-Register(ctx, *FlowSpec) (int, error)
+Register(ctx, *FlowSpec, opts…) (int, error)            // wiggle.Force() replaces a differing graph at the same version (server must allow it)
 GetWorkflow(ctx, name) (map[string]any, error)
 Start(ctx, workflowOrName, context, opts…) (id, error)   // WithVersion, WithCorrelationID
 Instance(ctx, id) (*InstanceView, error)
@@ -228,14 +254,13 @@ AwaitCompletion(ctx, id, timeout) (*InstanceView, error)
 ListInstances(ctx, workflow, status, limit)
 Cancel(ctx, id, reason) / Signal(ctx, id, name, payload)
 Health(ctx)
-Register(ctx, flowSpec, wiggle.Force())                  // replace a differing graph at the same version (server must allow it)
 GetWorkflowVersion(ctx, name, version)
 PollEvents(ctx, consumer, max, wait, startFrom) (*EventBatch, error)   // the durable event log
 AckEvents(ctx, consumer, cursor)
 Search(ctx, SearchQuery{...}) (*SearchResult, error)                   // needs search shards
 StepStats(ctx, workflow, version) (*StepStats, error)                  // per-step duration and queue-wait percentiles
 BacklogCoverage(ctx, max) ([]BacklogSlice, livePollers, error)
-// worker RPCs: Poll / ReportSteps / Fail / Heartbeat
+// worker RPCs: Poll / PollCriteria / ReportSteps / Fail / Heartbeat
 ```
 
 ## Step metadata and events
@@ -286,12 +311,12 @@ w := wiggle.NewWorker(client, "w1").
 	})
 ```
 
-A `*CreatedBranch` offers `ThenApply`, `ThenApplyCompensable` (declares an undo), `ThenAccept`, `ThenFilter` (a false gate ends the branch),
-`ThenSleep`, `ThenAwait(signal, timeout, escalation)`, `ThenSubFlow(node, workflow)`,
-`ThenAllOf(arms...).Combine(name)`, `RepeatWhile(condition, maxIterations, body)` and
-`ThenOneOf(When(guard, chain)..., Otherwise(chain))`. Steps take `OnQueue` and `WithRetry`
-options; otherwise a step uses the creating step's queue and retry policy.
-`.Combine(name)` after a branch task makes that task spawn too, so branches nest. A combine may
+A `*CreatedBranch` offers `ThenApply`, `ThenApplyCompensable` (declares an undo), `ThenAccept`,
+`ThenFilter` (a false gate ends the branch), `ThenSleep`, `ThenAwait(signal, timeout, escalation)`,
+`ThenSubFlow(node, workflow)`, `ThenAllOf(arms...).Combine(name)`,
+`RepeatWhile(condition, maxIterations, body)` and `ThenOneOf(When(guard, chain)..., Otherwise(chain))`.
+Steps take `OnQueue` and `WithRetry` options; otherwise a step uses the creating step's queue and
+retry policy. `.Combine(name)` after a branch task makes that task spawn too, so branches nest. A combine may
 itself `Create`, which starts another round. A chain built wrongly, or `Create` outside a spawning
 step or its combine, fails the step without a retry.
 
@@ -317,10 +342,11 @@ w := wiggle.NewWorker(client, "gold-1", wiggle.WithCriteria(gold)).Handle("order
 ```
 
 Package `criteria` (`github.com/hadielmougy/wiggle-go/criteria`) offers `Equal`, `NotEqual`, `In`,
-`LessThan(OrEqualTo)`, `GreaterThan(OrEqualTo)`, `Between`, `Like`, `IsNull` and `IsNotNull`, combined with
-`And`, `Or` and `Not`. A comparison on an absent value is false. `criteria.New` checks a predicate
-against the server's limits. `WithCriteria` replaces `WithQueues`. `Client.BacklogCoverage` shows ready
-work no live worker's criteria would claim.
+`LessThan(OrEqualTo)`, `GreaterThan(OrEqualTo)`, `Between`, `Like`, `IsNull` and `IsNotNull`, combined
+with `And`, `Or` and `Not`, over the task properties `Workflow`, `Version`, `Step`, `NodeID`, `Kind`,
+`Attempt`, `CorrelationID`, `InstanceCreatedAt` and `Attr(name)`. A comparison on an absent value is
+false. `criteria.New` (or `MustNew`) checks a predicate against the server's limits.
+`Client.BacklogCoverage` shows ready work no live worker's criteria would claim.
 
 ## Testing
 
