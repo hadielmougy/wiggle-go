@@ -19,7 +19,7 @@ func combined(s *wiggle.StepRun) []any {
 func TestIntegrationCreatedBranchesRunDifferentChains(t *testing.T) {
 	client, ctx := dialTest(t)
 	name := uniqueName("go-dyn-fulfil")
-	wf := wiggle.Graph{Name: name, Steps: []wiggle.Node{wiggle.Step{Name: "fulfil", Combine: "summarise"}}}.MustCompile()
+	wf := wiggle.MustDefine(name, 0, func(f *wiggle.Flow) { f.ThenApply("fulfil").Combine("summarise") })
 	w := wiggle.NewWorker(client, "dyn-fulfil").
 		BranchSteps(name, "deliver-link", "reserve", "ship").
 		HandleStep(name, "fulfil", func(s *wiggle.StepRun, o wiggle.Context) (wiggle.Context, error) {
@@ -91,7 +91,7 @@ func (fanHandlers) Gather(s *wiggle.StepRun, o wiggle.Context) (wiggle.Context, 
 func TestIntegrationKeyedBranchesFromAHandlersStruct(t *testing.T) {
 	client, ctx := dialTest(t)
 	name := uniqueName("go-dyn-keyed")
-	wf := wiggle.Graph{Name: name, Steps: []wiggle.Node{wiggle.Step{Name: "fan", Combine: "gather"}}}.MustCompile()
+	wf := wiggle.MustDefine(name, 0, func(f *wiggle.Flow) { f.ThenApply("fan").Combine("gather") })
 	w := wiggle.NewWorker(client, "dyn-keyed").RegisterHandler(name, fanHandlers{})
 	v := runFlow(t, client, ctx, wf, w, wiggle.Context{"xs": map[string]any{"a": 1.0, "b": 2.0}})
 	doubled, _ := v.Context["doubled"].(map[string]any)
@@ -103,7 +103,7 @@ func TestIntegrationKeyedBranchesFromAHandlersStruct(t *testing.T) {
 func TestIntegrationASpawningStepThatCreatesNothingStillCombines(t *testing.T) {
 	client, ctx := dialTest(t)
 	name := uniqueName("go-dyn-empty")
-	wf := wiggle.Graph{Name: name, Steps: []wiggle.Node{wiggle.Step{Name: "fan", Combine: "gather"}}}.MustCompile()
+	wf := wiggle.MustDefine(name, 0, func(f *wiggle.Flow) { f.ThenApply("fan").Combine("gather") })
 	w := wiggle.NewWorker(client, "dyn-empty").
 		Handle(name, "fan", func(o wiggle.Context) (wiggle.Context, error) { return o, nil }).
 		HandleCombineStep(name, "gather", func(s *wiggle.StepRun, o wiggle.Context) (wiggle.Context, error) {
@@ -118,7 +118,7 @@ func TestIntegrationASpawningStepThatCreatesNothingStillCombines(t *testing.T) {
 func TestIntegrationACombineThatCreatesBranchesRunsAnotherRound(t *testing.T) {
 	client, ctx := dialTest(t)
 	name := uniqueName("go-dyn-rounds")
-	wf := wiggle.Graph{Name: name, Steps: []wiggle.Node{wiggle.Step{Name: "seed", Combine: "again"}}}.MustCompile()
+	wf := wiggle.MustDefine(name, 0, func(f *wiggle.Flow) { f.ThenApply("seed").Combine("again") })
 	w := wiggle.NewWorker(client, "dyn-rounds").
 		BranchSteps(name, "inc").
 		HandleStep(name, "seed", func(s *wiggle.StepRun, o wiggle.Context) (wiggle.Context, error) {
@@ -149,10 +149,10 @@ func TestIntegrationACombineThatCreatesBranchesRunsAnotherRound(t *testing.T) {
 func TestIntegrationServerSideOperatorsInABranch(t *testing.T) {
 	client, ctx := dialTest(t)
 	name, child := uniqueName("go-dyn-ops"), uniqueName("go-dyn-child")
-	if _, err := client.Register(ctx, wiggle.Graph{Name: child, Steps: []wiggle.Node{wiggle.Step{Name: "child-work"}}}.MustCompile()); err != nil {
+	if _, err := client.Register(ctx, wiggle.MustDefine(child, 0, func(f *wiggle.Flow) { f.ThenApply("child-work") })); err != nil {
 		t.Fatal(err)
 	}
-	wf := wiggle.Graph{Name: name, Steps: []wiggle.Node{wiggle.Step{Name: "plan", Combine: "done"}}}.MustCompile()
+	wf := wiggle.MustDefine(name, 0, func(f *wiggle.Flow) { f.ThenApply("plan").Combine("done") })
 	set := func(k string, v any) wiggle.Activity {
 		return func(b wiggle.Context) (wiggle.Context, error) { b[k] = v; return b, nil }
 	}
@@ -226,7 +226,7 @@ func TestIntegrationServerSideOperatorsInABranch(t *testing.T) {
 func TestIntegrationNestedBranches(t *testing.T) {
 	client, ctx := dialTest(t)
 	name := uniqueName("go-dyn-nested")
-	wf := wiggle.Graph{Name: name, Steps: []wiggle.Node{wiggle.Step{Name: "lines", Combine: "packed-all"}}}.MustCompile()
+	wf := wiggle.MustDefine(name, 0, func(f *wiggle.Flow) { f.ThenApply("lines").Combine("packed-all") })
 	w := wiggle.NewWorker(client, "dyn-nested").
 		BranchSteps(name, "pick", "packed", "label", "scan").
 		HandleStep(name, "lines", func(s *wiggle.StepRun, o wiggle.Context) (wiggle.Context, error) {
@@ -266,8 +266,7 @@ func TestIntegrationNestedBranches(t *testing.T) {
 func TestIntegrationACompensableBranchStepIsUndone(t *testing.T) {
 	client, ctx := dialTest(t)
 	name := uniqueName("go-dyn-saga")
-	wf := wiggle.Graph{Name: name, Steps: []wiggle.Node{
-		wiggle.Step{Name: "book", Combine: "settle"}, wiggle.Step{Name: "boom"}}}.MustCompile()
+	wf := wiggle.MustDefine(name, 0, func(f *wiggle.Flow) { f.ThenApply("book").Combine("settle").ThenApply("boom") })
 	undone := make(chan wiggle.Compensation, 1)
 	w := wiggle.NewWorker(client, "dyn-saga").
 		BranchSteps(name, "hold").
@@ -296,7 +295,7 @@ func TestIntegrationACompensableBranchStepIsUndone(t *testing.T) {
 func TestIntegrationCreateOutsideASpawningStepFailsTheStep(t *testing.T) {
 	client, ctx := dialTest(t)
 	name := uniqueName("go-dyn-misuse")
-	wf := wiggle.Graph{Name: name, Steps: []wiggle.Node{wiggle.Step{Name: "plain"}}}.MustCompile()
+	wf := wiggle.MustDefine(name, 0, func(f *wiggle.Flow) { f.ThenApply("plain") })
 	w := wiggle.NewWorker(client, "dyn-misuse").
 		HandleStep(name, "plain", func(s *wiggle.StepRun, o wiggle.Context) (wiggle.Context, error) {
 			s.Create(o).ThenApply("x")
@@ -312,8 +311,9 @@ func TestIntegrationQueueCriteriaClaimOnlyTheMatchingTasks(t *testing.T) {
 	client, ctx := dialTest(t)
 	name := uniqueName("go-crit")
 	queue := name + "-q"
-	wf := wiggle.Graph{Name: name, Steps: []wiggle.Node{wiggle.Step{Name: "work", Queue: queue}},
-		Attributes: []wiggle.DispatchAttribute{{Name: "tier", Type: "STRING", Path: "customer.tier"}}}.MustCompile()
+	wf := wiggle.MustDefine(name, 0, func(f *wiggle.Flow) {
+		f.Attribute("tier", "STRING", "customer.tier").ThenApply("work", wiggle.OnQueue(queue))
+	})
 	if _, err := client.Register(ctx, wf); err != nil {
 		t.Fatal(err)
 	}

@@ -56,8 +56,8 @@ func WithAwaitRegistration(d time.Duration) WorkerOption {
 
 // Worker pulls tasks it has capacity for, runs the matching handler, and reports the result. It holds
 // no durable state: a crash loses at most the in-flight step, which the server re-leases. A worker
-// implements steps by name (Handle); topology is registered separately (Client.Register of a compiled
-// Graph, or the wiggle CLI).
+// implements steps by name (Handle); topology is registered separately (Client.Register of a FlowSpec
+// from Define, or the wiggle CLI).
 type Worker struct {
 	client *Client
 	id     string

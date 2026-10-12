@@ -61,25 +61,11 @@ func (r RetryPolicy) toJSON() map[string]any {
 	}
 }
 
-// ---- declarative topology ----
-//
-// A workflow is described as data, not a fluent chain: a Graph with an ordered list of Nodes. Each
-// Node is one of the concrete types below (Task, Gate, Fork, ...). Compile() turns it into a
-// FlowSpec. Handlers are implemented separately and bound by name (Worker.Handle).
-
-// Graph is the declarative description of a workflow's topology.
-type Graph struct {
-	Name         string
-	Version      int    // 0 = a content-hash version
-	DefaultQueue string // "" = the workflow name
-	Steps        []Node
-	Attributes   []DispatchAttribute // values queue criteria can test (criteria.Attr)
-}
-
-// DispatchAttribute is a value the workflow declares for queue criteria to test: Path is a dotted path into
-// the context a step receives, read as Type -- STRING, LONG, DECIMAL or BOOLEAN. The server extracts
-// it each time a step becomes ready; a value that is missing or does not fit the type is absent.
-type DispatchAttribute struct {
+// dispatchAttribute is a value the workflow declares (Flow.Attribute) for queue criteria to test:
+// Path is a dotted path into the context a step receives, read as Type -- STRING, LONG, DECIMAL or
+// BOOLEAN. The server extracts it each time a step becomes ready; a value that is missing or does
+// not fit the type is absent.
+type dispatchAttribute struct {
 	Name string
 	Type string
 	Path string
@@ -90,7 +76,7 @@ const MaxAttributes = 16
 
 var attributeName = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
 
-func (a DispatchAttribute) validate() error {
+func (a dispatchAttribute) validate() error {
 	if !attributeName.MatchString(a.Name) {
 		return fmt.Errorf("attribute name %q must match %s", a.Name, attributeName)
 	}
@@ -105,134 +91,83 @@ func (a DispatchAttribute) validate() error {
 	return nil
 }
 
-// Node is one step in a workflow. The interface is sealed: only the types in this package
-// (Task, Effect, Gate, Sleep, AwaitSignal, SubWorkflow, Fork, ForkEach, Choose, DoWhile) are Nodes.
-type Node interface{ isNode() }
-
-// Step is a unit of work run on a worker; its handler returns the new context.
+// ---- recorded topology ----
 //
-// Combine makes the step a spawning step: its handler may create branches (StepRun.Create), and the
-// combine step Combine (bound with Worker.HandleCombine) receives their results through
-// StepRun.Results and returns the post-join context. The combine always runs, with no results
-// when the step created nothing, and may itself create the next round.
-//
-// Compensate declares the step compensable: if the instance later fails, the engine runs the
-// step's compensator (bound with Worker.HandleCompensation or a Compensate<Step> method) in the
-// reverse pass, handing it the input/result context snapshots captured at this step's completion.
-type Step struct {
-	Name       string
-	Queue      string      // "" = the default queue
-	Retry      RetryPolicy // zero = default
-	Compensate bool        // declare an undo; a compensator MUST be bound for this step
-	Combine    string      // a spawning step: the combine its created branches rejoin at
+// A Flow records the nodes below as its chain is built; compile wires them into a FlowSpec.
+
+type node interface{ isNode() }
+
+// taskNode is a task or a side effect (the two differ only in the bound handler). A combine makes it
+// a spawning step; compensate declares its undo.
+type taskNode struct {
+	name       string
+	queue      string
+	retry      RetryPolicy
+	compensate bool
+	combine    string
 }
 
-// Effect is a step run for its side effect only; the context is unchanged. (Topologically identical
-// to a Step -- the difference is only in the bound handler.) Compensate declares an undo exactly
-// as on a Step (for an effect the two snapshots are the same context). Combine makes it a
-// spawning step, as on a Step.
-type Effect struct {
-	Name       string
-	Queue      string
-	Retry      RetryPolicy
-	Compensate bool
-	Combine    string
+type gateNode struct {
+	name  string
+	queue string
+	retry RetryPolicy
 }
 
-// Gate continues only while its predicate holds; false ends the instance as gated:<name> (or, inside
-// a branch, short-circuits to that fork's join).
-type Gate struct {
-	Name  string
-	Queue string
-	Retry RetryPolicy
+type sleepNode struct {
+	name string
+	d    time.Duration
 }
 
-// Sleep waits on a server-side timer; no worker is held. Name is optional.
-type Sleep struct {
-	Name string
-	For  time.Duration
+type signalNode struct {
+	name       string
+	timeout    time.Duration
+	escalation []node
 }
 
-// AwaitSignal waits for a named external signal (delivered via Client.Signal). With Escalation set, a
-// timeout runs the escalation branch and rejoins instead of failing.
-type AwaitSignal struct {
-	Name       string
-	Timeout    time.Duration
-	Escalation []Node
+type subFlowNode struct {
+	name     string
+	workflow string
 }
 
-// SubWorkflow runs another registered workflow as a child; its result merges back. Name is the node
-// name (defaults to Workflow); Workflow is the child's name.
-type SubWorkflow struct {
-	Name     string
-	Workflow string
+type armNode struct {
+	name  string
+	steps []node
 }
 
-// Branch is one arm of a Fork.
-type Branch struct {
-	Name  string
-	Steps []Node
+type forkNode struct {
+	arms    []armNode
+	combine string
 }
 
-// Fork fans out into parallel branches and waits for all of them (needs >= 2). Combine names the
-// MANDATORY merge step that runs after the join: its handler receives the context with each
-// branch's result staged under the branch's name, and must return the COMPLETE post-join context
-// (the engine replaces the context with it -- there is no implicit fold of the arms, and keys the
-// handler omits do not survive the join). Bind it with Worker.HandleCombine or a RegisterHandler
-// method matched by name.
-type Fork struct {
-	Branches []Branch
-	Combine  string
+type forEachNode struct {
+	name     string
+	itemsKey string
+	body     []node
+	combine  string
 }
 
-// ForEach fans out one ISOLATED branch per element of the collection at ItemsKey (a list or a map).
-// The element IS each item's context: body steps are bound with HandleItem (or an
-// ItemActivity-shaped method) — they receive the item's current value and their return replaces
-// it; the frozen base and the element's index/source key ride on the activation. Combine names the
-// MANDATORY merge step: its handler receives the context with every item's FINAL VALUE collected
-// under the forEach's name — a list ordered by item index for a list input, a map keyed like the
-// input for a map input — and must return the COMPLETE post-join context. An empty collection
-// skips the body and the combine.
-type ForEach struct {
-	Name     string // label; the collected results are staged under this key for the combine
-	ItemsKey string // itemsKey
-	Body     []Node
-	Combine  string
+type caseNode struct {
+	when string // "" = otherwise
+	then []node
 }
 
-// Case is one arm of a Choose. When == "" marks the default (otherwise) arm, which must be last.
-type Case struct {
-	When string // predicate name; "" = otherwise
-	Then []Node
+type chooseNode struct{ cases []caseNode }
+
+type loopNode struct {
+	while         string
+	maxIterations int
+	body          []node
 }
 
-// Choose runs the first matching guard's branch; the rest are skipped.
-type Choose struct {
-	Cases []Case
-}
-
-// DoWhile runs Body once, then repeats while the While predicate holds (Body runs at least once).
-//
-// Every loop is budgeted: the While guard may evaluate true at most MaxIterations times, after
-// which the instance FAILS with a clear error — an unbounded loop with a buggy condition would
-// hot-spin workers and the database. Zero means the engine default (WIGGLE_LOOP_MAX_ITERATIONS,
-// 10,000); set it explicitly when a loop legitimately needs more.
-type DoWhile struct {
-	While         string
-	MaxIterations int
-	Body          []Node
-}
-
-func (Step) isNode()        {}
-func (Effect) isNode()      {}
-func (Gate) isNode()        {}
-func (Sleep) isNode()       {}
-func (AwaitSignal) isNode() {}
-func (SubWorkflow) isNode() {}
-func (Fork) isNode()        {}
-func (ForEach) isNode()     {}
-func (Choose) isNode()      {}
-func (DoWhile) isNode()     {}
+func (taskNode) isNode()    {}
+func (gateNode) isNode()    {}
+func (sleepNode) isNode()   {}
+func (signalNode) isNode()  {}
+func (subFlowNode) isNode() {}
+func (forkNode) isNode()    {}
+func (forEachNode) isNode() {}
+func (chooseNode) isNode()  {}
+func (loopNode) isNode()    {}
 
 // ---- graph store ----
 
@@ -445,113 +380,111 @@ func (b *builder) wireOpenTo(target string) {
 	b.open = nil
 }
 
-func (b *builder) appendNodes(nodes []Node) {
+func (b *builder) appendNodes(nodes []node) {
 	for _, n := range nodes {
 		b.appendNode(n)
 	}
 }
 
-func (b *builder) appendNode(n Node) {
+func (b *builder) appendNode(n node) {
 	switch node := n.(type) {
-	case Step:
-		b.appendTask(node.Name, node.Queue, node.Retry, node.Compensate, node.Combine)
-	case Effect:
-		b.appendTask(node.Name, node.Queue, node.Retry, node.Compensate, node.Combine)
-	case Gate:
-		id := b.g.addWorker("PREDICATE", node.Name, node.Queue, node.Retry)
+	case taskNode:
+		b.appendTask(node.name, node.queue, node.retry, node.compensate, node.combine)
+	case gateNode:
+		id := b.g.addWorker("PREDICATE", node.name, node.queue, node.retry)
 		b.attach(id)
 		target := b.enclosingJoin
 		if target == "" {
-			target = b.g.addEnd("gated:" + node.Name)
+			target = b.g.addEnd("gated:" + node.name)
 		}
 		b.g.wire(id, "alt", target)
 		b.open = []openEnd{{id, "next"}}
-	case Sleep:
-		name := node.Name
+	case sleepNode:
+		name := node.name
 		if name == "" {
-			name = fmt.Sprintf("sleep-%dms", node.For.Milliseconds())
+			name = fmt.Sprintf("sleep-%dms", node.d.Milliseconds())
 		}
-		b.chain(b.g.addTimer("SLEEP", name, node.For.Milliseconds(), false))
-	case AwaitSignal:
-		id := b.g.addTimer("SIGNAL", node.Name, node.Timeout.Milliseconds(), true)
+		b.chain(b.g.addTimer("SLEEP", name, node.d.Milliseconds(), false))
+	case signalNode:
+		id := b.g.addTimer("SIGNAL", node.name, node.timeout.Milliseconds(), true)
 		b.attach(id)
-		if len(node.Escalation) == 0 {
+		if len(node.escalation) == 0 {
 			b.open = []openEnd{{id, "next"}}
 			return
 		}
-		if node.Timeout <= 0 {
-			fail("await_signal %q escalation needs a positive timeout", node.Name)
+		if node.timeout <= 0 {
+			fail("await_signal %q escalation needs a positive timeout", node.name)
 		}
 		esc := b.sub(b.enclosingJoin)
-		esc.appendNodes(node.Escalation)
+		esc.appendNodes(node.escalation)
 		if esc.start == "" {
-			fail("escalation branch of %q defines no steps", node.Name)
+			fail("escalation branch of %q defines no steps", node.name)
 		}
 		b.g.wire(id, "alt", esc.start)
 		b.open = append([]openEnd{{id, "next"}}, esc.open...)
-	case SubWorkflow:
-		child := node.Workflow
+	case subFlowNode:
+		child := node.workflow
 		if child == "" {
 			fail("sub_workflow is missing its child workflow name")
 		}
-		name := node.Name
+		name := node.name
 		if name == "" {
 			name = child
 		}
 		b.chain(b.g.addSubWorkflow(name, child))
-	case Fork:
-		if len(node.Branches) < 2 {
+	case forkNode:
+		if len(node.arms) < 2 {
 			fail("fork needs at least two branches")
 		}
-		if node.Combine == "" {
+		if node.combine == "" {
 			fail("fork needs a combine step name (Fork.Combine): branches rejoin at an explicit merge handler")
 		}
 		forkID := b.g.addFork()
 		b.attach(forkID)
-		joinID := b.g.addJoin(len(node.Branches))
-		starts := make([]string, 0, len(node.Branches))
-		arms := make([]string, 0, len(node.Branches))
-		for _, br := range node.Branches {
+		joinID := b.g.addJoin(len(node.arms))
+		starts := make([]string, 0, len(node.arms))
+		arms := make([]string, 0, len(node.arms))
+		for _, br := range node.arms {
 			starts = append(starts, b.buildBranch(br, joinID))
-			arms = append(arms, br.Name)
+			arms = append(arms, br.name)
 		}
 		b.g.setBranches(forkID, starts)
-		combineID := b.g.addCombine(node.Combine, arms)
+		combineID := b.g.addCombine(node.combine, arms)
 		b.g.wire(joinID, "next", combineID)
 		b.open = []openEnd{{combineID, "next"}}
-	case ForEach:
-		if len(node.Body) == 0 {
-			fail("for_each %q body defines no steps", node.Name)
+	case forEachNode:
+		if len(node.body) == 0 {
+			fail("for_each %q body defines no steps", node.name)
 		}
-		if node.Combine == "" {
+		if node.combine == "" {
 			fail("for_each needs a combine step name (ForEach.Combine): item results rejoin at an explicit merge handler")
 		}
-		name := node.Name
+		name := node.name
 		if name == "" {
-			name = node.ItemsKey
+			name = node.itemsKey
 		}
-		forkID := b.g.addDynFork(name, node.ItemsKey, node.ItemsKey)
+		forkID := b.g.addDynFork(name, node.itemsKey, node.itemsKey)
 		b.attach(forkID)
 		joinID := b.g.addJoin(0)
-		template := b.buildBranch(Branch{Name: name, Steps: node.Body}, joinID)
+		template := b.buildBranch(armNode{name: name, steps: node.body}, joinID)
 		b.g.setBranches(forkID, []string{template})
 		b.g.wire(forkID, "next", joinID) // empty-collection skip (past the combine too, engine-side)
-		combineID := b.g.addForEachCombine(node.Combine, name)
+		combineID := b.g.addForEachCombine(node.combine, name)
 		b.g.wire(joinID, "next", combineID)
 		b.open = []openEnd{{combineID, "next"}}
-	case Choose:
+	case chooseNode:
 		b.appendChoose(node)
-	case DoWhile:
+	case loopNode:
 		sub := b.sub(b.enclosingJoin)
-		sub.appendNodes(node.Body)
+		sub.appendNodes(node.body)
 		if sub.start == "" {
 			fail("do_while body defines no steps")
 		}
-		if node.MaxIterations < 0 {
-			fail("do_while %q: MaxIterations must be positive (0 = engine default)", node.While)
+		if node.maxIterations < 0 {
+			fail("do_while %q: MaxIterations must be positive (0 = engine default)", node.while)
 		}
-		condID := b.g.addWorker("PREDICATE", node.While, "", RetryPolicy{})
-		budget := node.MaxIterations
+		condID := b.g.addWorker("PREDICATE", node.while, "", RetryPolicy{})
+		budget := node.maxIterations
 		if budget == 0 {
 			budget = -1 // engine default — mirrors the Java client's two-arg doWhile
 		}
@@ -565,26 +498,26 @@ func (b *builder) appendNode(n Node) {
 	}
 }
 
-func (b *builder) appendChoose(c Choose) {
-	if len(c.Cases) == 0 {
+func (b *builder) appendChoose(c chooseNode) {
+	if len(c.cases) == 0 {
 		fail("choose needs at least one case")
 	}
-	hasDefault := c.Cases[len(c.Cases)-1].When == ""
-	for _, cs := range c.Cases[:len(c.Cases)-1] {
-		if cs.When == "" {
+	hasDefault := c.cases[len(c.cases)-1].when == ""
+	for _, cs := range c.cases[:len(c.cases)-1] {
+		if cs.when == "" {
 			fail("the otherwise (default) case must be last")
 		}
 	}
-	if hasDefault && len(c.Cases) == 1 {
+	if hasDefault && len(c.cases) == 1 {
 		fail("choose needs at least one guarded case")
 	}
-	nGuards := len(c.Cases)
+	nGuards := len(c.cases)
 	if hasDefault {
 		nGuards--
 	}
 	guardIDs := make([]string, nGuards)
 	for i := 0; i < nGuards; i++ {
-		guardIDs[i] = b.g.addWorker("PREDICATE", c.Cases[i].When, "", RetryPolicy{})
+		guardIDs[i] = b.g.addWorker("PREDICATE", c.cases[i].when, "", RetryPolicy{})
 	}
 	b.attach(guardIDs[0])
 	b.open = nil
@@ -592,27 +525,27 @@ func (b *builder) appendChoose(c Choose) {
 		b.g.wire(guardIDs[i], "alt", guardIDs[i+1])
 	}
 	for i := 0; i < nGuards; i++ {
-		b.collectCase(c.Cases[i].Then, guardIDs[i], "next")
+		b.collectCase(c.cases[i].then, guardIDs[i], "next")
 	}
 	last := guardIDs[nGuards-1]
 	if hasDefault {
-		b.collectCase(c.Cases[len(c.Cases)-1].Then, last, "alt")
+		b.collectCase(c.cases[len(c.cases)-1].then, last, "alt")
 	} else {
 		b.open = append(b.open, openEnd{last, "alt"})
 	}
 }
 
-func (b *builder) buildBranch(br Branch, joinID string) string {
+func (b *builder) buildBranch(br armNode, joinID string) string {
 	sub := b.sub(joinID)
-	sub.appendNodes(br.Steps)
+	sub.appendNodes(br.steps)
 	if sub.start == "" {
-		fail("branch %q defines no steps", br.Name)
+		fail("branch %q defines no steps", br.name)
 	}
 	sub.wireOpenTo(joinID)
 	return sub.start
 }
 
-func (b *builder) collectCase(then []Node, guardID, edge string) {
+func (b *builder) collectCase(then []node, guardID, edge string) {
 	sub := b.sub(b.enclosingJoin)
 	sub.appendNodes(then)
 	if sub.start == "" {
@@ -630,14 +563,14 @@ func (e compileError) Error() string { return string(e) }
 
 func fail(format string, args ...any) { panic(compileError(fmt.Sprintf(format, args...))) }
 
-// Compile turns the declarative Graph into a FlowSpec (topology only). It returns an error -- never
+// compile wires a recorded flow into a FlowSpec (topology only). It returns an error -- never
 // panics to the caller -- for an invalid topology (duplicate name, fork with < 2 branches, an empty
 // branch/body, a bad choose, escalation without a timeout).
-func (g Graph) Compile() (bp *FlowSpec, err error) {
-	if g.Name == "" {
+func compile(f *Flow) (bp *FlowSpec, err error) {
+	if f.name == "" {
 		return nil, errors.New("workflow name is required")
 	}
-	if len(g.Steps) == 0 {
+	if len(f.steps) == 0 {
 		return nil, errors.New("workflow has no steps")
 	}
 	defer func() {
@@ -650,13 +583,13 @@ func (g Graph) Compile() (bp *FlowSpec, err error) {
 		}
 	}()
 
-	dq := g.DefaultQueue
+	dq := f.defaultQueue
 	if dq == "" {
-		dq = g.Name
+		dq = f.name
 	}
-	gr := newGraph(g.Name, dq)
+	gr := newGraph(f.name, dq)
 	root := &builder{g: gr, isRoot: true}
-	root.appendNodes(g.Steps)
+	root.appendNodes(f.steps)
 	endID := gr.addEnd("")
 	root.wireOpenTo(endID)
 	if gr.startNode == "" {
@@ -680,19 +613,19 @@ func (g Graph) Compile() (bp *FlowSpec, err error) {
 	}
 
 	def := map[string]any{
-		"name":          g.Name,
+		"name":          f.name,
 		"startNode":     gr.startNode,
 		"nodes":         nodes,
 		"queues":        toAnySlice(queues),
 		"executionMode": "SERVER",
 	}
-	if len(g.Attributes) > MaxAttributes {
-		return nil, fmt.Errorf("a workflow declares at most %d attributes, got %d", MaxAttributes, len(g.Attributes))
+	if len(f.attributes) > MaxAttributes {
+		return nil, fmt.Errorf("a workflow declares at most %d attributes, got %d", MaxAttributes, len(f.attributes))
 	}
-	if len(g.Attributes) > 0 {
-		attrs := make([]any, 0, len(g.Attributes))
+	if len(f.attributes) > 0 {
+		attrs := make([]any, 0, len(f.attributes))
 		seen := map[string]bool{}
-		for _, a := range g.Attributes {
+		for _, a := range f.attributes {
 			if err := a.validate(); err != nil {
 				return nil, err
 			}
@@ -704,23 +637,13 @@ func (g Graph) Compile() (bp *FlowSpec, err error) {
 		}
 		def["attributes"] = attrs
 	}
-	version := g.Version
+	version := f.version
 	if version == 0 {
 		version = contentVersion(def)
 	}
 	def["version"] = version
 
-	return &FlowSpec{Name: g.Name, Version: version, Definition: def, Queues: queues}, nil
-}
-
-// MustCompile is Compile that panics on error -- convenient for a topology defined as a literal that
-// is known-good at build time.
-func (g Graph) MustCompile() *FlowSpec {
-	bp, err := g.Compile()
-	if err != nil {
-		panic(err)
-	}
-	return bp
+	return &FlowSpec{Name: f.name, Version: version, Definition: def, Queues: queues}, nil
 }
 
 // contentVersion is a deterministic positive 31-bit hash of the graph (name, nodes, edges, mode),

@@ -55,7 +55,7 @@ func (s *StepRun) Emit(eventType string, payload map[string]any) error {
 // Create opens a branch over input -- its whole, isolated context -- to chain steps onto. Like Emit,
 // the branch is buffered and rides the step's report: it runs once the step completes, and an
 // attempt that fails leaves nothing behind. Its result reaches the combine after the step, through
-// StepRun.Results. Only a spawning step (Step{Combine: ...}), or its combine, may create branches;
+// StepRun.Results. Only a spawning step (ThenApply(...).Combine(...)), or its combine, may create branches;
 // anywhere else the step fails.
 func (s *StepRun) Create(input any) *CreatedBranch { return s.create("", false, input) }
 
@@ -69,7 +69,7 @@ func (s *StepRun) create(key string, keyed bool, input any) *CreatedBranch {
 	b := &CreatedBranch{input: input, key: key, keyed: keyed}
 	if !s.creates {
 		b.fail(fmt.Errorf("step %q cannot create branches: only a step followed directly by a combine "+
-			"(Step{Combine: ...}), or that combine, may call Create", s.name))
+			"(ThenApply(...).Combine(...)), or that combine, may call Create", s.name))
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
