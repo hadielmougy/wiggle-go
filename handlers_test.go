@@ -38,7 +38,7 @@ func orderGraph() map[string]any {
 
 func TestRegisterHandlersMatchesByNameAndKind(t *testing.T) {
 	w := NewWorker(nil, "w")
-	w.RegisterHandlers("order", orderHandlers{})
+	w.RegisterHandler("order", orderHandlers{})
 	bindings, err := bindHandlerSet(orderGraph(), w.handlerSets[0])
 	if err == nil {
 		err = w.applyBindings(bindings)
@@ -52,18 +52,18 @@ func TestRegisterHandlersMatchesByNameAndKind(t *testing.T) {
 		}
 	}
 	// gate wrapper returns the bool
-	got, err := w.handlers["order#in-stock"](Context{"qty": 2.0})
+	got, err := w.handlers["order#in-stock"](nil, Context{"qty": 2.0})
 	if err != nil || got != true {
 		t.Fatalf("gate = %v, %v", got, err)
 	}
 	// task wrapper returns the WHOLE next context (it replaces server-side)
-	res, _ := w.handlers["order#charge"](Context{"orderId": "o1", "qty": 1.0})
+	res, _ := w.handlers["order#charge"](nil, Context{"orderId": "o1", "qty": 1.0})
 	m := res.(Context)
 	if m["paid"] != true || m["orderId"] != "o1" {
 		t.Fatalf("charge result = %v (want the complete context incl. paid)", m)
 	}
 	// effect wrapper returns nil
-	if r, _ := w.handlers["order#notify"](Context{}); r != nil {
+	if r, _ := w.handlers["order#notify"](nil, Context{}); r != nil {
 		t.Fatalf("effect result = %v, want nil", r)
 	}
 	// queue discovered from the graph
@@ -84,7 +84,7 @@ func TestRegisterHandlersRejectsCaseFoldDuplicates(t *testing.T) {
 			t.Fatalf("want panic about duplicate step name, got %v", r)
 		}
 	}()
-	NewWorker(nil, "w").RegisterHandlers("order", dupHandlers{})
+	NewWorker(nil, "w").RegisterHandler("order", dupHandlers{})
 }
 
 type noHandlers struct{}
@@ -97,16 +97,16 @@ func TestRegisterHandlersRejectsNoHandlerMethods(t *testing.T) {
 			t.Fatalf("want panic about no handler methods, got %v", r)
 		}
 	}()
-	NewWorker(nil, "w").RegisterHandlers("order", noHandlers{})
+	NewWorker(nil, "w").RegisterHandler("order", noHandlers{})
 }
 
 type strayHandlers struct{}
 
-func (strayHandlers) Validate(o Context) (Context, error) { return o, nil }
+func (strayHandlers) Validate(o Context) (Context, error)  { return o, nil }
 func (strayHandlers) ShipItNow(o Context) (Context, error) { return o, nil } // no such step
 
 func TestRegisterHandlersRejectsMethodMatchingNoStep(t *testing.T) {
-	w := NewWorker(nil, "w").RegisterHandlers("order", strayHandlers{})
+	w := NewWorker(nil, "w").RegisterHandler("order", strayHandlers{})
 	_, err := bindHandlerSet(orderGraph(), w.handlerSets[0])
 	if err == nil || !strings.Contains(err.Error(), "ShipItNow") {
 		t.Fatalf("want error about ShipItNow matching no step, got %v", err)
@@ -119,7 +119,7 @@ type kindClashHandlers struct{}
 func (kindClashHandlers) InStock(o Context) (Context, error) { return o, nil }
 
 func TestRegisterHandlersRejectsKindClash(t *testing.T) {
-	w := NewWorker(nil, "w").RegisterHandlers("order", kindClashHandlers{})
+	w := NewWorker(nil, "w").RegisterHandler("order", kindClashHandlers{})
 	_, err := bindHandlerSet(orderGraph(), w.handlerSets[0])
 	if err == nil || !strings.Contains(err.Error(), "PREDICATE") {
 		t.Fatalf("want kind-clash error, got %v", err)
@@ -133,6 +133,7 @@ func keys(m map[string]activityHandler) []string {
 	}
 	return out
 }
+
 // ---- pure-binder cases (mirrors Java HandlerBinderTest / Python test_binder) ----
 
 type eachHandlers struct{}
@@ -144,12 +145,12 @@ func TestBindHandlerSetIsPure(t *testing.T) {
 	bp := Graph{
 		Name: "each",
 		Steps: []Node{
-			ForEach{Name: "per-item", Over: "items", Body: []Node{Step{Name: "norm"}}, Combine: "collect"},
+			ForEach{Name: "per-item", ItemsKey: "items", Body: []Node{Step{Name: "norm"}}, Combine: "collect"},
 			Step{Name: "after", Queue: "special"},
 		},
 	}.MustCompile()
 
-	w := NewWorker(nil, "w").RegisterHandlers("each", eachHandlers{})
+	w := NewWorker(nil, "w").RegisterHandler("each", eachHandlers{})
 	bindings, err := bindHandlerSet(bp.Definition, w.handlerSets[0])
 	if err != nil {
 		t.Fatal(err)
@@ -194,7 +195,7 @@ func TestBindRejectsNonActivityCombine(t *testing.T) {
 			}, Combine: "merge"},
 		},
 	}.MustCompile()
-	w := NewWorker(nil, "w").RegisterHandlers("wf", badCombineHandlers{})
+	w := NewWorker(nil, "w").RegisterHandler("wf", badCombineHandlers{})
 	if _, err := bindHandlerSet(bp.Definition, w.handlerSets[0]); err == nil {
 		t.Fatalf("a combine bound to a non-Activity shape must fail")
 	}
@@ -220,7 +221,7 @@ func (h sagaHandlers) CompensateReserve(c Compensation) error {
 
 func TestCompensatorBindsAndSplitsSnapshots(t *testing.T) {
 	var got Compensation
-	w := NewWorker(nil, "w").RegisterHandlers("saga", sagaHandlers{got: &got})
+	w := NewWorker(nil, "w").RegisterHandler("saga", sagaHandlers{got: &got})
 	bindings, err := bindHandlerSet(sagaGraph(), w.handlerSets[0])
 	if err != nil {
 		t.Fatal(err)
@@ -237,7 +238,7 @@ func TestCompensatorBindsAndSplitsSnapshots(t *testing.T) {
 		t.Fatalf("compensator inherits the forward step's queue, got %q", comp.queue)
 	}
 	// The engine stages the two snapshots as {"input":..., "result":...}; the wrapper splits them.
-	out, err := comp.handler(Context{
+	out, err := comp.handler(nil, Context{
 		"input":  map[string]any{"orderId": "o1"},
 		"result": map[string]any{"orderId": "o1", "reservationRef": "r-9"},
 	})
@@ -255,7 +256,7 @@ func (undoLessHandlers) Reserve(o Context) (Context, error) { return o, nil }
 func (undoLessHandlers) Charge(o Context) (Context, error)  { return o, nil }
 
 func TestCompensableStepWithoutCompensatorRefusesToBind(t *testing.T) {
-	w := NewWorker(nil, "w").RegisterHandlers("saga", undoLessHandlers{})
+	w := NewWorker(nil, "w").RegisterHandler("saga", undoLessHandlers{})
 	_, err := bindHandlerSet(sagaGraph(), w.handlerSets[0])
 	if err == nil || !strings.Contains(err.Error(), "Compensate") {
 		t.Fatalf("want missing-compensator error, got %v", err)
@@ -264,13 +265,13 @@ func TestCompensableStepWithoutCompensatorRefusesToBind(t *testing.T) {
 
 type strayCompensator struct{}
 
-func (strayCompensator) Reserve(o Context) (Context, error) { return o, nil }
-func (strayCompensator) Charge(o Context) (Context, error)  { return o, nil }
+func (strayCompensator) Reserve(o Context) (Context, error)   { return o, nil }
+func (strayCompensator) Charge(o Context) (Context, error)    { return o, nil }
 func (strayCompensator) CompensateReserve(Compensation) error { return nil }
 func (strayCompensator) CompensateCharge(Compensation) error  { return nil } // charge is NOT compensable
 
 func TestCompensatorOnNonCompensableStepRefusesToBind(t *testing.T) {
-	w := NewWorker(nil, "w").RegisterHandlers("saga", strayCompensator{})
+	w := NewWorker(nil, "w").RegisterHandler("saga", strayCompensator{})
 	_, err := bindHandlerSet(sagaGraph(), w.handlerSets[0])
 	if err == nil || !strings.Contains(err.Error(), "CompensateCharge") {
 		t.Fatalf("want stray-compensator error, got %v", err)

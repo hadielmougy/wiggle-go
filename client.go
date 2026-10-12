@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hadielmougy/wiggle-go/criteria"
 	"github.com/hadielmougy/wiggle-go/internal/pb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -21,7 +22,7 @@ import (
 var terminal = map[string]bool{"COMPLETED": true, "FAILED": true, "CANCELLED": true,
 	"COMPENSATED": true, "COMPENSATION_FAILED": true}
 
-// callReady makes the worker-critical RPCs (register, get-workflow, poll, complete, fail, heartbeat)
+// callReady makes the worker-critical RPCs (register, get-workflow, poll, report, fail, heartbeat)
 // wait for the server to become reachable instead of failing fast with UNAVAILABLE -- so a worker
 // rides out a cold start, a rolling restart, or a reschedule without crashing. Query calls stay
 // fail-fast.
@@ -99,13 +100,26 @@ func stripScheme(target string) string {
 
 // ---- workflows & instances ----
 
+// RegisterOption customizes Register.
+type RegisterOption func(*pb.WorkflowDefinition)
+
+// Force replaces an already-registered (name, version) whose graph differs instead of failing. The
+// server refuses it unless it is configured to allow graph replacement.
+func Force() RegisterOption {
+	return func(d *pb.WorkflowDefinition) { d.Force = true }
+}
+
 // Register registers a workflow definition and returns its version (idempotent for the same graph).
-func (c *Client) Register(ctx context.Context, bp *Blueprint) (int, error) {
+func (c *Client) Register(ctx context.Context, bp *FlowSpec, opts ...RegisterOption) (int, error) {
 	s, err := toStruct(bp.Definition)
 	if err != nil {
 		return 0, fmt.Errorf("encode definition: %w", err)
 	}
-	res, err := c.rpc.RegisterWorkflow(ctx, &pb.WorkflowDefinition{Definition: s}, callReady)
+	def := &pb.WorkflowDefinition{Definition: s}
+	for _, o := range opts {
+		o(def)
+	}
+	res, err := c.rpc.RegisterWorkflow(ctx, def, callReady)
 	if err != nil {
 		return 0, err
 	}
@@ -118,7 +132,16 @@ func (c *Client) Register(ctx context.Context, bp *Blueprint) (int, error) {
 // GetWorkflow returns the registered graph for name as a JSON map -- the server's source of truth for
 // a workflow's step names, kinds, and queues. Used by Worker reconciliation.
 func (c *Client) GetWorkflow(ctx context.Context, name string) (map[string]any, error) {
-	res, err := c.rpc.GetWorkflow(ctx, &pb.GetWorkflowRequest{Name: name}, callReady)
+	return c.getWorkflow(ctx, &pb.GetWorkflowRequest{Name: name})
+}
+
+// GetWorkflowVersion returns one specific registered version of a workflow's graph.
+func (c *Client) GetWorkflowVersion(ctx context.Context, name string, version int32) (map[string]any, error) {
+	return c.getWorkflow(ctx, &pb.GetWorkflowRequest{Name: name, Version: &version})
+}
+
+func (c *Client) getWorkflow(ctx context.Context, req *pb.GetWorkflowRequest) (map[string]any, error) {
+	res, err := c.rpc.GetWorkflow(ctx, req, callReady)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +161,7 @@ func WithCorrelationID(id string) StartOption {
 	return func(r *pb.StartInstanceRequest) { r.CorrelationId = &id }
 }
 
-// Start starts an instance and returns its id. workflow may be a name or a *Blueprint.
+// Start starts an instance and returns its id. workflow may be a name or a *FlowSpec.
 func (c *Client) Start(ctx context.Context, workflow any, initial Context, opts ...StartOption) (string, error) {
 	name, err := workflowName(workflow)
 	if err != nil {
@@ -163,12 +186,12 @@ func workflowName(workflow any) (string, error) {
 	switch w := workflow.(type) {
 	case string:
 		return w, nil
-	case *Blueprint:
+	case *FlowSpec:
 		return w.Name, nil
-	case Blueprint:
+	case FlowSpec:
 		return w.Name, nil
 	default:
-		return "", fmt.Errorf("workflow must be a name or *Blueprint, got %T", workflow)
+		return "", fmt.Errorf("workflow must be a name or *FlowSpec, got %T", workflow)
 	}
 }
 
@@ -295,6 +318,16 @@ type Task struct {
 	ItemIndex                    int64
 	ItemMapKey                   string
 	ExecutionMode                string
+	CollectKey                   string   // set only for the combine of a forEach or of created branches
+	ArmNames                     []string // set only for a fork's combine: the arms it merges, in fork order
+	CorrelationID                string   // the instance's; empty when it has none
+	InstanceCreatedAt            int64
+}
+
+// WorkflowVersion is one (workflow, version) a worker serves.
+type WorkflowVersion struct {
+	Workflow string
+	Version  int32
 }
 
 // PollResult is the outcome of a poll: leased tasks, plus a backpressure hold-off hint.
@@ -303,11 +336,35 @@ type PollResult struct {
 	RetryAfterMillis int64
 }
 
-// Poll leases up to max ready tasks from the given queues.
-func (c *Client) Poll(ctx context.Context, workerID string, queues []string, max int, leaseMillis, waitMillis int64) (*PollResult, error) {
-	res, err := c.rpc.PollTasks(ctx, &pb.PollRequest{
+// Poll leases up to max ready tasks from the given queues. Non-empty versions claims only those
+// (workflow, version) pairs' tasks.
+func (c *Client) Poll(ctx context.Context, workerID string, queues []string, max int, leaseMillis, waitMillis int64,
+	versions ...WorkflowVersion) (*PollResult, error) {
+	req := &pb.PollRequest{
 		WorkerId: workerID, Queues: queues, Max: int32(max), LeaseMillis: leaseMillis, WaitMillis: waitMillis,
-	}, callReady)
+	}
+	for _, v := range versions {
+		req.Versions = append(req.Versions, &pb.WorkflowVersion{Workflow: v.Workflow, Version: v.Version})
+	}
+	return c.poll(ctx, req)
+}
+
+// PollCriteria leases up to max ready tasks, from each criteria's queue those its predicate holds
+// for. Non-empty versions claims only those (workflow, version) pairs' tasks.
+func (c *Client) PollCriteria(ctx context.Context, workerID string, cs []criteria.QueueCriteria, max int,
+	leaseMillis, waitMillis int64, versions ...WorkflowVersion) (*PollResult, error) {
+	req := &pb.PollRequest{WorkerId: workerID, Max: int32(max), LeaseMillis: leaseMillis, WaitMillis: waitMillis}
+	for _, v := range versions {
+		req.Versions = append(req.Versions, &pb.WorkflowVersion{Workflow: v.Workflow, Version: v.Version})
+	}
+	for _, qc := range cs {
+		req.Criteria = append(req.Criteria, criteriaProto(qc))
+	}
+	return c.poll(ctx, req)
+}
+
+func (c *Client) poll(ctx context.Context, req *pb.PollRequest) (*PollResult, error) {
+	res, err := c.rpc.PollTasks(ctx, req, callReady)
 	if err != nil {
 		return nil, err
 	}
@@ -324,20 +381,11 @@ func (c *Client) Poll(ctx context.Context, workerID string, queues []string, max
 			BaseContext: asMap(fromValue(t.GetBaseContext())),
 			ItemIndex:   t.GetItemIndex(), ItemMapKey: t.GetItemMapKey(),
 			ExecutionMode: t.GetExecutionMode(),
+			CollectKey:    t.GetCollectKey(), ArmNames: t.GetArmNames(),
+			CorrelationID: t.GetCorrelationId(), InstanceCreatedAt: t.GetInstanceCreatedAt(),
 		})
 	}
 	return out, nil
-}
-
-// Complete reports a finished task; result is merged into the context (a predicate sends its boolean
-// as {"value": bool}).
-func (c *Client) Complete(ctx context.Context, taskID, leaseOwner string, result any) error {
-	val, err := toValue(result)
-	if err != nil {
-		return err
-	}
-	_, err = c.rpc.CompleteTask(ctx, &pb.TaskResultRequest{TaskId: taskID, LeaseOwner: leaseOwner, Result: val}, callReady)
-	return err
 }
 
 // Fail reports a failed task; retryable=false skips the retry policy.
@@ -357,4 +405,49 @@ func (c *Client) Heartbeat(ctx context.Context, taskID, leaseOwner string, exten
 		return 0, err
 	}
 	return res.GetLeaseExpiresAt(), nil
+}
+
+func criteriaProto(c criteria.QueueCriteria) *pb.QueueCriteria {
+	out := &pb.QueueCriteria{Queue: c.Queue}
+	if c.Where != nil {
+		out.Where = predicateProto(c.Where)
+	}
+	return out
+}
+
+func predicateProto(p criteria.Predicate) *pb.CriteriaPredicate {
+	switch x := p.(type) {
+	case criteria.Comparison:
+		cmp := &pb.CriteriaComparison{Field: x.Attribute.Field, Op: x.Op, Attribute: x.Attribute.Name}
+		for _, a := range x.Args {
+			l := &pb.CriteriaLiteral{}
+			switch v := a.(type) {
+			case bool:
+				l.V = &pb.CriteriaLiteral_Flag{Flag: v}
+			case int64:
+				l.V = &pb.CriteriaLiteral_Integer{Integer: v}
+			case criteria.Decimal:
+				l.V = &pb.CriteriaLiteral_Decimal{Decimal: string(v)}
+			case string:
+				l.V = &pb.CriteriaLiteral_Text{Text: v}
+			}
+			cmp.Args = append(cmp.Args, l)
+		}
+		return &pb.CriteriaPredicate{P: &pb.CriteriaPredicate_Cmp{Cmp: cmp}}
+	case criteria.AllOf:
+		return &pb.CriteriaPredicate{P: &pb.CriteriaPredicate_AllOf{AllOf: junctionProto(x.Terms)}}
+	case criteria.AnyOf:
+		return &pb.CriteriaPredicate{P: &pb.CriteriaPredicate_AnyOf{AnyOf: junctionProto(x.Terms)}}
+	case criteria.Negated:
+		return &pb.CriteriaPredicate{P: &pb.CriteriaPredicate_Negated{Negated: predicateProto(x.Term)}}
+	}
+	return &pb.CriteriaPredicate{}
+}
+
+func junctionProto(terms []criteria.Predicate) *pb.CriteriaJunction {
+	j := &pb.CriteriaJunction{}
+	for _, t := range terms {
+		j.Terms = append(j.Terms, predicateProto(t))
+	}
+	return j
 }

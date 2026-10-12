@@ -7,28 +7,33 @@ import (
 	"log"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/hadielmougy/wiggle-go/criteria"
 )
 
 // activityHandler is the internal, pre-wrapped step handler: it returns the value to report
-// (a shallow-diff map for a task, a bool for a predicate, nil for an effect).
-type activityHandler func(Context) (any, error)
+// (the complete next context for a task, a bool for a predicate, nil for an effect).
+type activityHandler func(*StepRun, Context) (any, error)
 
 type claim struct{ workflow, step, kind string }
 
 // WorkerOption tunes a Worker.
 type WorkerOption func(*Worker)
 
-// Concurrency sets the maximum steps in flight (default: NumCPU).
-func Concurrency(n int) WorkerOption { return func(w *Worker) { w.concurrency = n } }
+// WithConcurrency sets the maximum steps in flight (default: NumCPU).
+func WithConcurrency(n int) WorkerOption { return func(w *Worker) { w.concurrency = n } }
 
-// Lease sets how long a claimed step may run before the server reclaims it (default 30s).
-func Lease(d time.Duration) WorkerOption { return func(w *Worker) { w.leaseMillis = d.Milliseconds() } }
+// WithLease sets how long a claimed step may run before the server reclaims it (default 30s).
+func WithLease(d time.Duration) WorkerOption {
+	return func(w *Worker) { w.leaseMillis = d.Milliseconds() }
+}
 
-// Queues restricts the worker to the given queues (else it serves every queue it learns about).
-func Queues(names ...string) WorkerOption {
+// WithQueues restricts the worker to the given queues (else it serves every queue it learns about).
+func WithQueues(names ...string) WorkerOption {
 	return func(w *Worker) {
 		w.explicitQueues = map[string]bool{}
 		for _, n := range names {
@@ -37,9 +42,15 @@ func Queues(names ...string) WorkerOption {
 	}
 }
 
-// AwaitRegistration makes Start wait up to d for a Handle-bound workflow's graph to appear before
+// WithCriteria serves each criteria's queue, claiming only the tasks its predicate holds for (see
+// package criteria), instead of the queues of the steps the worker binds. It replaces Queues.
+func WithCriteria(cs ...criteria.QueueCriteria) WorkerOption {
+	return func(w *Worker) { w.criteria = append(w.criteria, cs...) }
+}
+
+// WithAwaitRegistration makes Start wait up to d for a Handle-bound workflow's graph to appear before
 // failing (rides out a registration race). Zero fails fast.
-func AwaitRegistration(d time.Duration) WorkerOption {
+func WithAwaitRegistration(d time.Duration) WorkerOption {
 	return func(w *Worker) { w.awaitRegistration = d }
 }
 
@@ -51,11 +62,11 @@ type Worker struct {
 	client *Client
 	id     string
 
-	handlers    map[string]activityHandler
+	handlers     map[string]activityHandler
 	itemHandlers map[string]ItemActivity
-	queues      map[string]bool
-	claims      []claim
-	handlerSets []handlerSet
+	queues       map[string]bool
+	claims       []claim
+	handlerSets  []handlerSet
 
 	concurrency       int
 	leaseMillis       int64
@@ -64,6 +75,13 @@ type Worker struct {
 	errorBackoff      time.Duration
 	awaitRegistration time.Duration
 	explicitQueues    map[string]bool
+	criteria          []criteria.QueueCriteria
+
+	branchSteps  map[string]map[string]bool // workflow -> canonical names of steps only created branches run
+	createdKinds map[string]string          // activity -> the kind a branch step's handler was bound as
+	lazy         sync.Map                   // activity -> activityHandler bound on a created node's first dispatch
+	graphsMu     sync.Mutex
+	graphs       map[string]map[string]any // "workflow:version" -> registered graph
 
 	running atomic.Bool
 	ctx     context.Context
@@ -77,6 +95,9 @@ func NewWorker(client *Client, id string, opts ...WorkerOption) *Worker {
 		client: client, id: id,
 		handlers:     map[string]activityHandler{},
 		itemHandlers: map[string]ItemActivity{},
+		branchSteps:  map[string]map[string]bool{},
+		createdKinds: map[string]string{},
+		graphs:       map[string]map[string]any{},
 		queues:       map[string]bool{},
 		concurrency:  runtime.NumCPU(),
 		leaseMillis:  30_000,
@@ -96,16 +117,22 @@ func (w *Worker) Handle(workflow, step string, fn Activity) *Worker {
 	return w.bind(workflow, step, "TASK", taskHandler(fn))
 }
 
+// HandleStep binds a task handler that also receives the running StepRun, to read its attempt or
+// emit events. See Handle.
+func (w *Worker) HandleStep(workflow, step string, fn StepActivity) *Worker {
+	return w.bind(workflow, step, "TASK", stepHandler(fn))
+}
+
 // HandleGate binds a predicate step (gate / choose guard / do-while condition) by name.
 func (w *Worker) HandleGate(workflow, step string, test Predicate) *Worker {
-	return w.bind(workflow, step, "PREDICATE", func(ctx Context) (any, error) {
+	return w.bind(workflow, step, "PREDICATE", func(_ *StepRun, ctx Context) (any, error) {
 		return test(ctx)
 	})
 }
 
 // HandleEffect binds a side-effect step by name; the context is left unchanged.
 func (w *Worker) HandleEffect(workflow, step string, fn SideEffect) *Worker {
-	return w.bind(workflow, step, "TASK", func(ctx Context) (any, error) {
+	return w.bind(workflow, step, "TASK", func(_ *StepRun, ctx Context) (any, error) {
 		return nil, fn(ctx)
 	})
 }
@@ -115,6 +142,13 @@ func (w *Worker) HandleEffect(workflow, step string, fn SideEffect) *Worker {
 // context: it is sent verbatim (no diff, no implicit fold) and the engine REPLACES the context with
 // it -- keys fn omits do not survive the join.
 func (w *Worker) HandleCombine(workflow, step string, fn Activity) *Worker {
+	return w.bind(workflow, step, "COMBINE", combineHandler(withoutStep(fn)))
+}
+
+// HandleCombineStep is HandleCombine for a combine that also receives the running StepRun: a
+// spawning step's combine reads its branches' results through StepRun.Results, and may Create the
+// next round.
+func (w *Worker) HandleCombineStep(workflow, step string, fn StepActivity) *Worker {
 	return w.bind(workflow, step, "COMBINE", combineHandler(fn))
 }
 
@@ -145,6 +179,26 @@ func (w *Worker) HandleItem(workflow, step string, fn ItemActivity) *Worker {
 	return w
 }
 
+// BranchSteps declares steps of workflow that only branches created at run time run
+// (s.Create(...).ThenApply(step)), so they are in no registered graph. Their handlers -- bound with
+// Handle and its siblings, or methods of a RegisterHandler struct -- are then not matched against
+// the graph on Start, but bound when such a step is first dispatched. A branch step on a queue no
+// graph mentions runs only on a worker that polls that queue (Queues or WithCriteria).
+func (w *Worker) BranchSteps(workflow string, steps ...string) *Worker {
+	if workflow == "" || len(steps) == 0 {
+		panic("BranchSteps needs a workflow and at least one step")
+	}
+	set := w.branchSteps[workflow]
+	if set == nil {
+		set = map[string]bool{}
+		w.branchSteps[workflow] = set
+	}
+	for _, s := range steps {
+		set[canonicalName(s)] = true
+	}
+	return w
+}
+
 func (w *Worker) bind(workflow, step, kind string, h activityHandler) *Worker {
 	activity := workflow + "#" + step
 	if _, dup := w.handlers[activity]; dup {
@@ -156,6 +210,14 @@ func (w *Worker) bind(workflow, step, kind string, h activityHandler) *Worker {
 }
 
 func (w *Worker) servedQueues() []string {
+	if len(w.criteria) > 0 {
+		out := make([]string, 0, len(w.criteria))
+		for _, c := range w.criteria {
+			out = append(out, c.Queue)
+		}
+		sort.Strings(out)
+		return out
+	}
 	src := w.queues
 	if w.explicitQueues != nil {
 		src = w.explicitQueues
@@ -172,6 +234,10 @@ func (w *Worker) servedQueues() []string {
 func (w *Worker) Start(ctx context.Context) error {
 	if !w.running.CompareAndSwap(false, true) {
 		return nil
+	}
+	if err := w.checkCriteria(); err != nil {
+		w.running.Store(false)
+		return err
 	}
 	if len(w.claims) > 0 || len(w.handlerSets) > 0 {
 		if err := w.reconcile(ctx); err != nil {
@@ -216,28 +282,36 @@ func (w *Worker) reconcile(ctx context.Context) error {
 				nodes[act] = node
 			}
 		}
+		branch := w.branchSteps[wf]
 		for _, c := range claims {
 			activity := c.workflow + "#" + c.step
 			node, ok := nodes[activity]
+			if !ok && branch[canonicalName(c.step)] {
+				if c.kind == "COMPENSATE" {
+					w.createdKinds[activity+"#compensate"] = c.kind
+				} else {
+					w.createdKinds[activity] = c.kind
+				}
+				continue
+			}
 			if !ok {
 				return fmt.Errorf("no step %q in registered workflow %q (available: %v)",
 					c.step, wf, availableSteps(nodes))
 			}
 			k, _ := node["kind"].(string)
-			itemsKey, _ := node["itemsKey"].(string)
-			isCombine := k == "TASK" && itemsKey != ""
+			combine := isCombine(node)
 			compensable, _ := node["compensable"].(bool)
 			switch {
-			case c.kind == "COMPENSATE" && (k != "TASK" || isCombine || !compensable):
+			case c.kind == "COMPENSATE" && (k != "TASK" || combine || !compensable):
 				return fmt.Errorf("step %q of workflow %q is not declared Compensate in the "+
 					"topology; HandleCompensation binds only compensable steps", c.step, wf)
 			case c.kind == "COMPENSATE":
 				// ok: a compensator on a compensable step
-			case c.kind == "COMBINE" && !isCombine:
+			case c.kind == "COMBINE" && !combine:
 				return fmt.Errorf("activity %q is not a fork combine; bind it with Handle()", activity)
 			case c.kind == "COMBINE":
 				// ok: a combine claim on a combine node
-			case isCombine:
+			case combine:
 				return fmt.Errorf("activity %q is a fork combine; bind it with HandleCombine() -- "+
 					"its return is the complete post-join context (no implicit fold)", activity)
 			case k != c.kind:
@@ -289,6 +363,11 @@ func (w *Worker) fetchGraph(ctx context.Context, workflow string) (map[string]an
 	for {
 		g, err := w.client.GetWorkflow(ctx, workflow)
 		if err == nil {
+			if v, ok := g["version"].(float64); ok {
+				w.graphsMu.Lock()
+				w.graphs[fmt.Sprintf("%s:%d", workflow, int64(v))] = g
+				w.graphsMu.Unlock()
+			}
 			return g, nil
 		}
 		if time.Now().Before(deadline) {
@@ -296,7 +375,7 @@ func (w *Worker) fetchGraph(ctx context.Context, workflow string) (map[string]an
 			continue
 		}
 		return nil, fmt.Errorf("workflow %q is not registered; register its graph before starting a "+
-			"worker that binds handlers to it (or set AwaitRegistration): %w", workflow, err)
+			"worker that binds handlers to it (or set WithAwaitRegistration): %w", workflow, err)
 	}
 }
 
@@ -332,7 +411,13 @@ func (w *Worker) pollLoop() {
 			w.sleep(w.idleBackoff)
 			continue
 		}
-		res, err := w.client.Poll(w.ctx, w.id, w.servedQueues(), free, w.leaseMillis, w.waitMillis)
+		var res *PollResult
+		var err error
+		if len(w.criteria) > 0 {
+			res, err = w.client.PollCriteria(w.ctx, w.id, w.criteria, free, w.leaseMillis, w.waitMillis)
+		} else {
+			res, err = w.client.Poll(w.ctx, w.id, w.servedQueues(), free, w.leaseMillis, w.waitMillis)
+		}
 		if err != nil {
 			if !w.running.Load() {
 				break
@@ -363,40 +448,161 @@ func (w *Worker) pollLoop() {
 
 func (w *Worker) execute(task *Task) {
 	ctx := context.Background()
+	created := isCreatedNode(task.NodeID)
 	if task.IsItem {
-		w.executeItem(ctx, task)
-		return
+		if _, item := w.itemHandlers[task.Activity]; item || !created {
+			w.executeItem(ctx, task)
+			return
+		}
 	}
 	if _, item := w.itemHandlers[task.Activity]; item {
 		_ = w.client.Fail(ctx, task.TaskID, task.LeaseOwner,
 			fmt.Sprintf("activity %q was bound with HandleItem but is not a forEach item step; use Handle()", task.Activity), false)
 		return
 	}
-	handler, ok := w.handlers[task.Activity]
-	if !ok {
+	handler, err := w.handlerFor(task)
+	if err != nil {
+		_ = w.client.Fail(ctx, task.TaskID, task.LeaseOwner, err.Error(), false)
+		return
+	}
+	if handler == nil {
 		_ = w.client.Fail(ctx, task.TaskID, task.LeaseOwner,
 			fmt.Sprintf("no handler registered for activity %q", task.Activity), false)
 		return
 	}
+	if task.IsItem {
+		if _, object := task.RawContext.(map[string]any); !object {
+			_ = w.client.Fail(ctx, task.TaskID, task.LeaseOwner, fmt.Sprintf("step %q runs on a %T, not a "+
+				"JSON object; bind it with HandleItem(base, item)", task.StepName, task.RawContext), false)
+			return
+		}
+	}
 	stop := w.startHeartbeat(task)
 	defer close(stop)
 
-	result, err := handler(task.Context)
+	input, base, results, combine, err := unstage(task)
 	if err != nil {
-		var perm *PermanentError
-		if errors.As(err, &perm) {
-			_ = w.client.Fail(ctx, task.TaskID, task.LeaseOwner, perm.Error(), false)
-		} else {
-			_ = w.client.Fail(ctx, task.TaskID, task.LeaseOwner, err.Error(), true)
-		}
+		_ = w.client.Fail(ctx, task.TaskID, task.LeaseOwner, err.Error(), false)
 		return
 	}
+	step := newStep(task)
+	step.creates = w.createsBranches(task)
+	step.results, step.hasResults = results, combine
+	switch {
+	case task.IsItem:
+		step.base, step.hasBase = task.BaseContext, true
+	case combine:
+		step.base, step.hasBase = base, true
+	}
+	started := time.Now()
+	result, err := handler(step, input)
+	if err != nil {
+		w.fail(ctx, task, err)
+		return
+	}
+	events, branches, err := step.drain()
+	if err != nil {
+		_ = w.client.Fail(ctx, task.TaskID, task.LeaseOwner, err.Error(), false)
+		return
+	}
+	report := StepReport{NodeID: task.NodeID, StartedAt: started.UnixMilli(),
+		FinishedAt: started.UnixMilli() + time.Since(started).Milliseconds(), Events: events, Branches: branches}
 	if task.Kind == "PREDICATE" {
-		b, _ := result.(bool)
-		_ = w.client.Complete(ctx, task.TaskID, task.LeaseOwner, Context{"value": b})
-		return
+		b, isBool := result.(bool)
+		if !isBool {
+			_ = w.client.Fail(ctx, task.TaskID, task.LeaseOwner,
+				fmt.Sprintf("predicate %q returned %T", task.StepName, result), false)
+			return
+		}
+		report.Predicate = &b
+	} else {
+		report.Merge = result
 	}
-	_ = w.client.Complete(ctx, task.TaskID, task.LeaseOwner, result)
+	w.report(ctx, task, report)
+}
+
+func isCreatedNode(nodeID string) bool { return strings.HasPrefix(nodeID, "~") }
+
+// handlerFor is the handler for task. A step on a created node is in no graph, so it binds by name
+// on first dispatch -- from a Handle binding of a declared branch step, or a method of a
+// RegisterHandler struct -- and so does its undo, which may run on a worker that never ran the
+// step. It fails when the handler does not fit the dispatched step.
+func (w *Worker) handlerFor(task *Task) (activityHandler, error) {
+	h := w.handlers[task.Activity]
+	if !isCreatedNode(task.NodeID) {
+		return h, nil
+	}
+	undo := strings.HasSuffix(task.Activity, "#compensate")
+	combine := task.CollectKey != "" || len(task.ArmNames) > 0
+	kind := task.Kind
+	switch {
+	case undo:
+		kind = "COMPENSATE"
+	case combine:
+		kind = "COMBINE"
+	}
+	if h != nil {
+		if claimed, ok := w.createdKinds[task.Activity]; ok && claimed != kind {
+			return nil, fmt.Errorf("step %q runs as a %s but its handler was bound as a %s",
+				task.StepName, kind, claimed)
+		}
+		return h, nil
+	}
+	if bound, ok := w.lazy.Load(task.Activity); ok {
+		return bound.(activityHandler), nil
+	}
+	i := indexHash(task.Activity)
+	if i < 0 {
+		return nil, nil
+	}
+	workflow, name := task.Activity[:i], strings.TrimSuffix(task.Activity[i+1:], "#compensate")
+	for _, set := range w.handlerSets {
+		if set.workflow != workflow {
+			continue
+		}
+		bound, err := bindCreated(set, name, task.Kind, combine && !undo, undo)
+		if err != nil {
+			return nil, err
+		}
+		if bound != nil {
+			actual, _ := w.lazy.LoadOrStore(task.Activity, bound)
+			return actual.(activityHandler), nil
+		}
+	}
+	return nil, nil
+}
+
+// createsBranches reports whether task may call Create: a spawning step or its combine. A node this
+// worker does not hold -- a created one, or another version's -- is left to the server.
+func (w *Worker) createsBranches(task *Task) bool {
+	if strings.HasPrefix(task.CollectKey, spawnScratchPrefix) || isCreatedNode(task.NodeID) {
+		return true
+	}
+	w.graphsMu.Lock()
+	graph := w.graphs[fmt.Sprintf("%s:%d", task.Workflow, task.Version)]
+	w.graphsMu.Unlock()
+	if graph == nil {
+		return true
+	}
+	return spawns(graph, task.NodeID)
+}
+
+// checkCriteria refuses criteria beside Queues, or two criteria for one queue.
+func (w *Worker) checkCriteria() error {
+	if len(w.criteria) == 0 {
+		return nil
+	}
+	if w.explicitQueues != nil {
+		return fmt.Errorf("worker %s: set Queues or WithCriteria, not both", w.id)
+	}
+	seen := map[string]bool{}
+	for _, c := range w.criteria {
+		if seen[c.Queue] {
+			return fmt.Errorf("worker %s: queue %q has more than one criteria", w.id, c.Queue)
+		}
+		seen[c.Queue] = true
+	}
+	return nil
 }
 
 // executeItem runs a forEach body step: the handler gets (base, item) and its return replaces the
@@ -414,17 +620,30 @@ func (w *Worker) executeItem(ctx context.Context, task *Task) {
 	}
 	stop := w.startHeartbeat(task)
 	defer close(stop)
+	started := time.Now()
 	result, err := fn(task.BaseContext, task.RawContext)
 	if err != nil {
-		var perm *PermanentError
-		if errors.As(err, &perm) {
-			_ = w.client.Fail(ctx, task.TaskID, task.LeaseOwner, perm.Error(), false)
-		} else {
-			_ = w.client.Fail(ctx, task.TaskID, task.LeaseOwner, err.Error(), true)
-		}
+		w.fail(ctx, task, err)
 		return
 	}
-	_ = w.client.Complete(ctx, task.TaskID, task.LeaseOwner, result)
+	w.report(ctx, task, StepReport{NodeID: task.NodeID, Merge: result, StartedAt: started.UnixMilli(),
+		FinishedAt: started.UnixMilli() + time.Since(started).Milliseconds()})
+}
+
+// report settles a finished step. A refusal means the lease was lost; the task re-runs elsewhere.
+func (w *Worker) report(ctx context.Context, task *Task, step StepReport) {
+	if _, err := w.client.ReportSteps(ctx, task.TaskID, task.LeaseOwner, []StepReport{step}, true); err != nil {
+		log.Printf("wiggle: report of step %s of %s failed: %v", task.StepName, task.InstanceID, err)
+	}
+}
+
+func (w *Worker) fail(ctx context.Context, task *Task, err error) {
+	var perm *PermanentError
+	if errors.As(err, &perm) {
+		_ = w.client.Fail(ctx, task.TaskID, task.LeaseOwner, perm.Error(), false)
+	} else {
+		_ = w.client.Fail(ctx, task.TaskID, task.LeaseOwner, err.Error(), true)
+	}
 }
 
 // startHeartbeat extends the lease periodically while a slow step runs; close the channel to stop.

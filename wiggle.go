@@ -49,7 +49,7 @@ type Compensation struct {
 // instance fails, newest-completed first, as a real durable task with the normal retry machinery —
 // and, like every handler, at-least-once: make it idempotent (refund by an idempotency key, not
 // blindly). Returning a *PermanentError (or exhausting retries) parks the instance
-// COMPENSATION_FAILED. Bind it with Worker.HandleCompensation, or on a RegisterHandlers struct as
+// COMPENSATION_FAILED. Bind it with Worker.HandleCompensation, or on a RegisterHandler struct as
 // a method named Compensate<Step> with this shape.
 type Compensator func(Compensation) error
 

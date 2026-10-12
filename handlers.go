@@ -9,10 +9,11 @@ import (
 	"unicode"
 )
 
-// A struct passed to Worker.RegisterHandlers implements a workflow's steps as methods. Each exported
+// A struct passed to Worker.RegisterHandler implements a workflow's steps as methods. Each exported
 // method shaped like a handler is matched to a step by name; its Go signature picks the kind:
 //
-//	func(Context) (Context, error)  -> a task    (returns the new context; only the diff is sent back)
+//	func(Context) (Context, error)  -> a task    (returns the complete next context)
+//	func(*StepRun, Context) (Context, error) -> a task that also reads its StepRun or emits events
 //	func(Context) (bool, error)     -> a gate     (predicate: gate / choose guard / do-while condition)
 //	func(Context) error             -> an effect  (side effect; the context is left unchanged)
 //
@@ -34,13 +35,14 @@ var (
 	reflectAnyType  = reflect.TypeOf((*any)(nil)).Elem()
 	reflectErrType  = reflect.TypeOf((*error)(nil)).Elem()
 	reflectBoolType = reflect.TypeOf(false)
+	reflectStepType = reflect.TypeOf(&StepRun{})
 )
 
 type handlerCandidate struct {
 	name    string          // the exported method name, for error messages
 	kind    string          // the graph node kind this handler expects: "TASK" or "PREDICATE"
 	handler activityHandler // pre-wrapped, ready to bind (nil for item candidates)
-	raw     Activity        // the unwrapped Activity (nil for gates/effects); a combine binds this verbatim
+	raw     StepActivity    // the unwrapped task (nil for gates/effects); a combine binds this verbatim
 	item    ItemActivity    // a forEach body step: func(base Context, item any) (any, error)
 }
 
@@ -48,6 +50,13 @@ type handlerSet struct {
 	workflow     string
 	candidates   map[string]handlerCandidate // keyed by canonical (case-folded) name
 	compensators map[string]compCandidate    // keyed by canonical TARGET step name
+	branch       map[string]bool             // canonical names of steps only created branches run
+}
+
+// BranchStepper is implemented by a RegisterHandler struct whose methods include steps only
+// branches created at run time run; it declares them as Worker.BranchSteps does.
+type BranchStepper interface {
+	BranchSteps() []string
 }
 
 type compCandidate struct {
@@ -67,16 +76,16 @@ func canonicalName(s string) string {
 	return b.String()
 }
 
-// RegisterHandlers binds every handler-shaped method of handlers as a step of workflow, matched by
+// RegisterHandler binds every handler-shaped method of handlers as a step of workflow, matched by
 // name on Start (so a method InStock implements a step named "in-stock"), the graph confirming the
 // exact name and kind. It panics if two method names collide under case-folding (ambiguous), or if
 // handlers exposes no handler method. Pass a pointer if your methods use pointer receivers.
-func (w *Worker) RegisterHandlers(workflow string, handlers any) *Worker {
+func (w *Worker) RegisterHandler(workflow string, handlers any) *Worker {
 	if workflow == "" {
-		panic("RegisterHandlers: workflow is required")
+		panic("RegisterHandler: workflow is required")
 	}
 	if handlers == nil {
-		panic("RegisterHandlers: handlers is nil")
+		panic("RegisterHandler: handlers is nil")
 	}
 	set := handlerSet{workflow: workflow,
 		candidates:   map[string]handlerCandidate{},
@@ -88,7 +97,7 @@ func (w *Worker) RegisterHandlers(workflow string, handlers any) *Worker {
 		if target, fn, isComp := asCompensatorCandidate(name, v.Method(i)); isComp {
 			canon := canonicalName(target)
 			if prev, dup := set.compensators[canon]; dup {
-				panic(fmt.Sprintf("RegisterHandlers: compensators %q and %q both target step %q",
+				panic(fmt.Sprintf("RegisterHandler: compensators %q and %q both target step %q",
 					prev.name, name, canon))
 			}
 			set.compensators[canon] = compCandidate{name, fn}
@@ -106,14 +115,17 @@ func (w *Worker) RegisterHandlers(workflow string, handlers any) *Worker {
 			continue
 		}
 		if prev, dup := set.candidates[canon]; dup {
-			panic(fmt.Sprintf("RegisterHandlers: methods %q and %q map to the same step name %q; "+
+			panic(fmt.Sprintf("RegisterHandler: methods %q and %q map to the same step name %q; "+
 				"names differing only in case/style are ambiguous", prev.name, name, canon))
 		}
 		set.candidates[canon] = cand
 	}
 	if len(set.candidates) == 0 && len(set.compensators) == 0 {
-		panic(fmt.Sprintf("RegisterHandlers: %T exposes no handler methods (want a method shaped like "+
+		panic(fmt.Sprintf("RegisterHandler: %T exposes no handler methods (want a method shaped like "+
 			"func(Context)(Context,error), func(Context)(bool,error), or func(Context)error)", handlers))
+	}
+	if bs, ok := handlers.(BranchStepper); ok {
+		w.BranchSteps(workflow, bs.BranchSteps()...)
 	}
 	w.handlerSets = append(w.handlerSets, set)
 	return w
@@ -123,19 +135,24 @@ func (w *Worker) RegisterHandlers(workflow string, handlers any) *Worker {
 // shapes, returns the pre-wrapped candidate.
 func asHandlerCandidate(name string, m reflect.Value) (handlerCandidate, bool) {
 	mt := m.Type()
+	if mt.NumIn() == 2 && mt.In(0) == reflectStepType && mt.In(1) == reflectCtxType &&
+		mt.NumOut() == 2 && mt.Out(0) == reflectCtxType && mt.Out(1) == reflectErrType {
+		fn := StepActivity(m.Interface().(func(*StepRun, Context) (Context, error)))
+		return handlerCandidate{name, "TASK", stepHandler(fn), fn, nil}, true
+	}
 	if mt.NumIn() != 1 || mt.In(0) != reflectCtxType {
 		return handlerCandidate{}, false
 	}
 	switch {
 	case mt.NumOut() == 2 && mt.Out(0) == reflectCtxType && mt.Out(1) == reflectErrType:
 		fn := m.Interface().(func(Context) (Context, error))
-		return handlerCandidate{name, "TASK", taskHandler(fn), fn, nil}, true
+		return handlerCandidate{name, "TASK", taskHandler(fn), withoutStep(fn), nil}, true
 	case mt.NumOut() == 2 && mt.Out(0) == reflectBoolType && mt.Out(1) == reflectErrType:
 		fn := m.Interface().(func(Context) (bool, error))
-		return handlerCandidate{name, "PREDICATE", func(ctx Context) (any, error) { return fn(ctx) }, nil, nil}, true
+		return handlerCandidate{name, "PREDICATE", func(_ *StepRun, ctx Context) (any, error) { return fn(ctx) }, nil, nil}, true
 	case mt.NumOut() == 1 && mt.Out(0) == reflectErrType:
 		fn := m.Interface().(func(Context) error)
-		return handlerCandidate{name, "TASK", func(ctx Context) (any, error) { return nil, fn(ctx) }, nil, nil}, true
+		return handlerCandidate{name, "TASK", func(_ *StepRun, ctx Context) (any, error) { return nil, fn(ctx) }, nil, nil}, true
 	}
 	return handlerCandidate{}, false
 }
@@ -175,7 +192,7 @@ func asCompensatorCandidate(name string, m reflect.Value) (string, Compensator, 
 // two snapshots as the activation context {"input": ..., "result": ...}; split them out. The
 // return is nil — an undo never changes the (already doomed) instance context.
 func compensationHandler(fn Compensator) activityHandler {
-	return func(ctx Context) (any, error) {
+	return func(_ *StepRun, ctx Context) (any, error) {
 		input, _ := ctx["input"].(map[string]any)
 		result, _ := ctx["result"].(map[string]any)
 		return nil, fn(Compensation{Input: input, Result: result})
@@ -186,8 +203,13 @@ func compensationHandler(fn Compensator) activityHandler {
 // next context: it is sent whole and REPLACES the previous value server-side (no diff, no merge).
 // A nil return leaves the context untouched.
 func taskHandler(fn Activity) activityHandler {
-	return func(ctx Context) (any, error) {
-		out, err := fn(ctx)
+	return stepHandler(withoutStep(fn))
+}
+
+// stepHandler wraps a StepActivity the same way as taskHandler.
+func stepHandler(fn StepActivity) activityHandler {
+	return func(s *StepRun, ctx Context) (any, error) {
+		out, err := fn(s, ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -202,9 +224,9 @@ func taskHandler(fn Activity) activityHandler {
 // return is the COMPLETE post-join context and is sent verbatim, because the engine REPLACES the
 // context with it (keys the handler omits do not survive the join). A nil return leaves the
 // context untouched.
-func combineHandler(fn Activity) activityHandler {
-	return func(ctx Context) (any, error) {
-		out, err := fn(ctx)
+func combineHandler(fn StepActivity) activityHandler {
+	return func(s *StepRun, ctx Context) (any, error) {
+		out, err := fn(s, ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -213,6 +235,11 @@ func combineHandler(fn Activity) activityHandler {
 		}
 		return out, nil
 	}
+}
+
+// withoutStep adapts an Activity to a StepActivity that ignores its StepRun.
+func withoutStep(fn Activity) StepActivity {
+	return func(_ *StepRun, ctx Context) (Context, error) { return fn(ctx) }
 }
 
 // binding is one resolved handler: where it plugs into the worker, and exactly one of
@@ -225,13 +252,14 @@ type binding struct {
 	item     ItemActivity
 }
 
-// matchHandlerSet resolves a RegisterHandlers set against the registered graph (fetched here --
+// matchHandlerSet resolves a RegisterHandler set against the registered graph (fetched here --
 // the binder itself is pure), then installs the resulting bindings.
 func (w *Worker) matchHandlerSet(ctx context.Context, set handlerSet) error {
 	graph, err := w.fetchGraph(ctx, set.workflow)
 	if err != nil {
 		return err
 	}
+	set.branch = w.branchSteps[set.workflow]
 	bindings, err := bindHandlerSet(graph, set)
 	if err != nil {
 		return err
@@ -279,6 +307,9 @@ func bindHandlerSet(graph map[string]any, set handlerSet) ([]binding, error) {
 	for _, canon := range sortedKeys(set.candidates) { // deterministic order for stable errors
 		cand := set.candidates[canon]
 		node, ok := nodeByCanon[canon]
+		if !ok && set.branch[canon] {
+			continue // bound by bindCreated on its first dispatch
+		}
 		if !ok {
 			return nil, fmt.Errorf("handler %q matches no step in workflow %q (available: %v)",
 				cand.name, set.workflow, sortedValues(stepByCanon))
@@ -299,12 +330,12 @@ func bindHandlerSet(graph map[string]any, set handlerSet) ([]binding, error) {
 			continue
 		}
 		handler := cand.handler
-		if itemsKey, _ := node["itemsKey"].(string); itemsKey != "" {
+		if isCombine(node) {
 			// A combine node: its return is the COMPLETE post-join context, sent verbatim (no
 			// diff) -- the engine replaces the context with it. Only an Activity shape can serve it.
 			if cand.raw == nil {
 				return nil, fmt.Errorf("step %q of workflow %q is a fork combine; handler %q must be "+
-					"func(Context) (Context, error) returning the complete post-join context",
+					"func(Context) (Context, error) or func(*StepRun, Context) (Context, error) returning the complete post-join context",
 					step, set.workflow, cand.name)
 			}
 			handler = combineHandler(cand.raw)
@@ -317,15 +348,17 @@ func bindHandlerSet(graph map[string]any, set handlerSet) ([]binding, error) {
 	for _, canon := range sortedCompKeys(set.compensators) {
 		comp := set.compensators[canon]
 		node, ok := nodeByCanon[canon]
+		if !ok && set.branch[canon] {
+			continue
+		}
 		if !ok {
 			return nil, fmt.Errorf("compensator %q targets no step in workflow %q (available: %v)",
 				comp.name, set.workflow, sortedValues(stepByCanon))
 		}
 		step := stepByCanon[canon]
 		kind, _ := node["kind"].(string)
-		itemsKey, _ := node["itemsKey"].(string)
 		compensable, _ := node["compensable"].(bool)
-		if kind != "TASK" || itemsKey != "" || !compensable {
+		if kind != "TASK" || isCombine(node) || !compensable {
 			return nil, fmt.Errorf("compensator %q targets step %q of workflow %q, which is not "+
 				"declared Compensate in the topology", comp.name, step, set.workflow)
 		}
@@ -351,6 +384,38 @@ func bindHandlerSet(graph map[string]any, set handlerSet) ([]binding, error) {
 		}
 	}
 	return bindings, nil
+}
+
+// bindCreated is the handler for a step a created branch runs -- in no graph, so matched by name
+// on dispatch -- or nil when no method of set implements it. kind and combine describe the
+// dispatched task; undo asks for the step's compensator. It fails when the method's shape does not
+// fit the step, as bindHandlerSet would.
+func bindCreated(set handlerSet, step, kind string, combine, undo bool) (activityHandler, error) {
+	canon := canonicalName(step)
+	if undo {
+		if comp, ok := set.compensators[canon]; ok {
+			return compensationHandler(comp.fn), nil
+		}
+		return nil, nil
+	}
+	cand, ok := set.candidates[canon]
+	if !ok {
+		return nil, nil
+	}
+	switch {
+	case cand.item != nil:
+		return nil, fmt.Errorf("step %q of workflow %q is a created branch's step; handler %q must take "+
+			"the branch's context, not (base, item)", step, set.workflow, cand.name)
+	case combine && cand.raw == nil:
+		return nil, fmt.Errorf("step %q of workflow %q is a combine; handler %q must return the "+
+			"complete post-join context", step, set.workflow, cand.name)
+	case combine:
+		return combineHandler(cand.raw), nil
+	case cand.kind != kind:
+		return nil, fmt.Errorf("step %q of workflow %q is a %s but handler %q is a %s",
+			step, set.workflow, kind, cand.name, cand.kind)
+	}
+	return cand.handler, nil
 }
 
 func sortedCompKeys(m map[string]compCandidate) []string {

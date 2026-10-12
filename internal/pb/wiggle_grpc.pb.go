@@ -19,24 +19,28 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	WiggleControlPlane_HealthCheck_FullMethodName      = "/com.wiggle.proto.WiggleControlPlane/HealthCheck"
-	WiggleControlPlane_GetCluster_FullMethodName       = "/com.wiggle.proto.WiggleControlPlane/GetCluster"
-	WiggleControlPlane_ListWorkflows_FullMethodName    = "/com.wiggle.proto.WiggleControlPlane/ListWorkflows"
-	WiggleControlPlane_RegisterWorkflow_FullMethodName = "/com.wiggle.proto.WiggleControlPlane/RegisterWorkflow"
-	WiggleControlPlane_GetWorkflow_FullMethodName      = "/com.wiggle.proto.WiggleControlPlane/GetWorkflow"
-	WiggleControlPlane_StartInstance_FullMethodName    = "/com.wiggle.proto.WiggleControlPlane/StartInstance"
-	WiggleControlPlane_ListInstances_FullMethodName    = "/com.wiggle.proto.WiggleControlPlane/ListInstances"
-	WiggleControlPlane_GetInstance_FullMethodName      = "/com.wiggle.proto.WiggleControlPlane/GetInstance"
-	WiggleControlPlane_CancelInstance_FullMethodName   = "/com.wiggle.proto.WiggleControlPlane/CancelInstance"
-	WiggleControlPlane_SignalInstance_FullMethodName   = "/com.wiggle.proto.WiggleControlPlane/SignalInstance"
-	WiggleControlPlane_CreateSchedule_FullMethodName   = "/com.wiggle.proto.WiggleControlPlane/CreateSchedule"
-	WiggleControlPlane_ListSchedules_FullMethodName    = "/com.wiggle.proto.WiggleControlPlane/ListSchedules"
-	WiggleControlPlane_DeleteSchedule_FullMethodName   = "/com.wiggle.proto.WiggleControlPlane/DeleteSchedule"
-	WiggleControlPlane_PollTasks_FullMethodName        = "/com.wiggle.proto.WiggleControlPlane/PollTasks"
-	WiggleControlPlane_CompleteTask_FullMethodName     = "/com.wiggle.proto.WiggleControlPlane/CompleteTask"
-	WiggleControlPlane_FailTask_FullMethodName         = "/com.wiggle.proto.WiggleControlPlane/FailTask"
-	WiggleControlPlane_HeartbeatTask_FullMethodName    = "/com.wiggle.proto.WiggleControlPlane/HeartbeatTask"
-	WiggleControlPlane_AdvanceRun_FullMethodName       = "/com.wiggle.proto.WiggleControlPlane/AdvanceRun"
+	WiggleControlPlane_HealthCheck_FullMethodName        = "/com.wiggle.proto.WiggleControlPlane/HealthCheck"
+	WiggleControlPlane_GetCluster_FullMethodName         = "/com.wiggle.proto.WiggleControlPlane/GetCluster"
+	WiggleControlPlane_ListWorkflows_FullMethodName      = "/com.wiggle.proto.WiggleControlPlane/ListWorkflows"
+	WiggleControlPlane_GetBacklogCoverage_FullMethodName = "/com.wiggle.proto.WiggleControlPlane/GetBacklogCoverage"
+	WiggleControlPlane_RegisterWorkflow_FullMethodName   = "/com.wiggle.proto.WiggleControlPlane/RegisterWorkflow"
+	WiggleControlPlane_GetWorkflow_FullMethodName        = "/com.wiggle.proto.WiggleControlPlane/GetWorkflow"
+	WiggleControlPlane_StartInstance_FullMethodName      = "/com.wiggle.proto.WiggleControlPlane/StartInstance"
+	WiggleControlPlane_ListInstances_FullMethodName      = "/com.wiggle.proto.WiggleControlPlane/ListInstances"
+	WiggleControlPlane_GetInstance_FullMethodName        = "/com.wiggle.proto.WiggleControlPlane/GetInstance"
+	WiggleControlPlane_CancelInstance_FullMethodName     = "/com.wiggle.proto.WiggleControlPlane/CancelInstance"
+	WiggleControlPlane_SignalInstance_FullMethodName     = "/com.wiggle.proto.WiggleControlPlane/SignalInstance"
+	WiggleControlPlane_CreateSchedule_FullMethodName     = "/com.wiggle.proto.WiggleControlPlane/CreateSchedule"
+	WiggleControlPlane_ListSchedules_FullMethodName      = "/com.wiggle.proto.WiggleControlPlane/ListSchedules"
+	WiggleControlPlane_DeleteSchedule_FullMethodName     = "/com.wiggle.proto.WiggleControlPlane/DeleteSchedule"
+	WiggleControlPlane_PollTasks_FullMethodName          = "/com.wiggle.proto.WiggleControlPlane/PollTasks"
+	WiggleControlPlane_ReportSteps_FullMethodName        = "/com.wiggle.proto.WiggleControlPlane/ReportSteps"
+	WiggleControlPlane_FailTask_FullMethodName           = "/com.wiggle.proto.WiggleControlPlane/FailTask"
+	WiggleControlPlane_HeartbeatTask_FullMethodName      = "/com.wiggle.proto.WiggleControlPlane/HeartbeatTask"
+	WiggleControlPlane_PollEvents_FullMethodName         = "/com.wiggle.proto.WiggleControlPlane/PollEvents"
+	WiggleControlPlane_AckEvents_FullMethodName          = "/com.wiggle.proto.WiggleControlPlane/AckEvents"
+	WiggleControlPlane_GetStepStats_FullMethodName       = "/com.wiggle.proto.WiggleControlPlane/GetStepStats"
+	WiggleControlPlane_SearchInstances_FullMethodName    = "/com.wiggle.proto.WiggleControlPlane/SearchInstances"
 )
 
 // WiggleControlPlaneClient is the client API for WiggleControlPlane service.
@@ -49,6 +53,9 @@ type WiggleControlPlaneClient interface {
 	HealthCheck(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*HealthStatus, error)
 	GetCluster(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*ClusterView, error)
 	ListWorkflows(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*WorkflowNames, error)
+	// Dispatchable work split by (workflow, version, queue), each flagged with whether any worker
+	// polling this node would claim it. An uncovered slice is work nothing can pick up.
+	GetBacklogCoverage(ctx context.Context, in *BacklogCoverageRequest, opts ...grpc.CallOption) (*BacklogCoverage, error)
 	RegisterWorkflow(ctx context.Context, in *WorkflowDefinition, opts ...grpc.CallOption) (*RegisterWorkflowResult, error)
 	GetWorkflow(ctx context.Context, in *GetWorkflowRequest, opts ...grpc.CallOption) (*WorkflowDefinition, error)
 	StartInstance(ctx context.Context, in *StartInstanceRequest, opts ...grpc.CallOption) (*StartInstanceResult, error)
@@ -61,12 +68,23 @@ type WiggleControlPlaneClient interface {
 	ListSchedules(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*ScheduleList, error)
 	DeleteSchedule(ctx context.Context, in *ScheduleIdRequest, opts ...grpc.CallOption) (*Ack, error)
 	PollTasks(ctx context.Context, in *PollRequest, opts ...grpc.CallOption) (*TaskList, error)
-	CompleteTask(ctx context.Context, in *TaskResultRequest, opts ...grpc.CallOption) (*Ack, error)
+	// The one way a worker reports finished work: one run of steps, or several independent runs
+	// applied in a single commit. The server resolves each workflow's execution mode and decides
+	// from it whether the continuation is leased back to this worker or released -- the client
+	// never chooses that, so it cannot choose wrong. Answers are per run, keyed by task id.
+	ReportSteps(ctx context.Context, in *ReportStepsRequest, opts ...grpc.CallOption) (*ReportStepsResult, error)
 	FailTask(ctx context.Context, in *TaskFailureRequest, opts ...grpc.CallOption) (*Ack, error)
 	HeartbeatTask(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResult, error)
-	// Applies an ordered run of locally-executed steps atomically, keeps the lease, and reports
-	// whether the worker should keep going (LOCAL_SYNC / LOCAL_ASYNC execution).
-	AdvanceRun(ctx context.Context, in *AdvanceRunRequest, opts ...grpc.CallOption) (*AdvanceRunResult, error)
+	// The event feed: pull-and-ack over the durable event log. A consumer is a named cursor;
+	// PollEvents long-polls like PollTasks and merges every shard's log, AckEvents advances the
+	// cursor to the one an entry carries.
+	PollEvents(ctx context.Context, in *PollEventsRequest, opts ...grpc.CallOption) (*EventList, error)
+	AckEvents(ctx context.Context, in *AckEventsRequest, opts ...grpc.CallOption) (*Ack, error)
+	// Per-node duration statistics over recently settled steps of one workflow version.
+	GetStepStats(ctx context.Context, in *StepStatsRequest, opts ...grpc.CallOption) (*StepStats, error)
+	// Full-text search over instances, across every search shard; FAILED_PRECONDITION when search is
+	// not enabled. Hits are limited to the workflows the caller may read.
+	SearchInstances(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResult, error)
 }
 
 type wiggleControlPlaneClient struct {
@@ -101,6 +119,16 @@ func (c *wiggleControlPlaneClient) ListWorkflows(ctx context.Context, in *Empty,
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(WorkflowNames)
 	err := c.cc.Invoke(ctx, WiggleControlPlane_ListWorkflows_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *wiggleControlPlaneClient) GetBacklogCoverage(ctx context.Context, in *BacklogCoverageRequest, opts ...grpc.CallOption) (*BacklogCoverage, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BacklogCoverage)
+	err := c.cc.Invoke(ctx, WiggleControlPlane_GetBacklogCoverage_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -217,10 +245,10 @@ func (c *wiggleControlPlaneClient) PollTasks(ctx context.Context, in *PollReques
 	return out, nil
 }
 
-func (c *wiggleControlPlaneClient) CompleteTask(ctx context.Context, in *TaskResultRequest, opts ...grpc.CallOption) (*Ack, error) {
+func (c *wiggleControlPlaneClient) ReportSteps(ctx context.Context, in *ReportStepsRequest, opts ...grpc.CallOption) (*ReportStepsResult, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Ack)
-	err := c.cc.Invoke(ctx, WiggleControlPlane_CompleteTask_FullMethodName, in, out, cOpts...)
+	out := new(ReportStepsResult)
+	err := c.cc.Invoke(ctx, WiggleControlPlane_ReportSteps_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -247,10 +275,40 @@ func (c *wiggleControlPlaneClient) HeartbeatTask(ctx context.Context, in *Heartb
 	return out, nil
 }
 
-func (c *wiggleControlPlaneClient) AdvanceRun(ctx context.Context, in *AdvanceRunRequest, opts ...grpc.CallOption) (*AdvanceRunResult, error) {
+func (c *wiggleControlPlaneClient) PollEvents(ctx context.Context, in *PollEventsRequest, opts ...grpc.CallOption) (*EventList, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AdvanceRunResult)
-	err := c.cc.Invoke(ctx, WiggleControlPlane_AdvanceRun_FullMethodName, in, out, cOpts...)
+	out := new(EventList)
+	err := c.cc.Invoke(ctx, WiggleControlPlane_PollEvents_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *wiggleControlPlaneClient) AckEvents(ctx context.Context, in *AckEventsRequest, opts ...grpc.CallOption) (*Ack, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Ack)
+	err := c.cc.Invoke(ctx, WiggleControlPlane_AckEvents_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *wiggleControlPlaneClient) GetStepStats(ctx context.Context, in *StepStatsRequest, opts ...grpc.CallOption) (*StepStats, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StepStats)
+	err := c.cc.Invoke(ctx, WiggleControlPlane_GetStepStats_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *wiggleControlPlaneClient) SearchInstances(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResult, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SearchResult)
+	err := c.cc.Invoke(ctx, WiggleControlPlane_SearchInstances_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -267,6 +325,9 @@ type WiggleControlPlaneServer interface {
 	HealthCheck(context.Context, *Empty) (*HealthStatus, error)
 	GetCluster(context.Context, *Empty) (*ClusterView, error)
 	ListWorkflows(context.Context, *Empty) (*WorkflowNames, error)
+	// Dispatchable work split by (workflow, version, queue), each flagged with whether any worker
+	// polling this node would claim it. An uncovered slice is work nothing can pick up.
+	GetBacklogCoverage(context.Context, *BacklogCoverageRequest) (*BacklogCoverage, error)
 	RegisterWorkflow(context.Context, *WorkflowDefinition) (*RegisterWorkflowResult, error)
 	GetWorkflow(context.Context, *GetWorkflowRequest) (*WorkflowDefinition, error)
 	StartInstance(context.Context, *StartInstanceRequest) (*StartInstanceResult, error)
@@ -279,12 +340,23 @@ type WiggleControlPlaneServer interface {
 	ListSchedules(context.Context, *Empty) (*ScheduleList, error)
 	DeleteSchedule(context.Context, *ScheduleIdRequest) (*Ack, error)
 	PollTasks(context.Context, *PollRequest) (*TaskList, error)
-	CompleteTask(context.Context, *TaskResultRequest) (*Ack, error)
+	// The one way a worker reports finished work: one run of steps, or several independent runs
+	// applied in a single commit. The server resolves each workflow's execution mode and decides
+	// from it whether the continuation is leased back to this worker or released -- the client
+	// never chooses that, so it cannot choose wrong. Answers are per run, keyed by task id.
+	ReportSteps(context.Context, *ReportStepsRequest) (*ReportStepsResult, error)
 	FailTask(context.Context, *TaskFailureRequest) (*Ack, error)
 	HeartbeatTask(context.Context, *HeartbeatRequest) (*HeartbeatResult, error)
-	// Applies an ordered run of locally-executed steps atomically, keeps the lease, and reports
-	// whether the worker should keep going (LOCAL_SYNC / LOCAL_ASYNC execution).
-	AdvanceRun(context.Context, *AdvanceRunRequest) (*AdvanceRunResult, error)
+	// The event feed: pull-and-ack over the durable event log. A consumer is a named cursor;
+	// PollEvents long-polls like PollTasks and merges every shard's log, AckEvents advances the
+	// cursor to the one an entry carries.
+	PollEvents(context.Context, *PollEventsRequest) (*EventList, error)
+	AckEvents(context.Context, *AckEventsRequest) (*Ack, error)
+	// Per-node duration statistics over recently settled steps of one workflow version.
+	GetStepStats(context.Context, *StepStatsRequest) (*StepStats, error)
+	// Full-text search over instances, across every search shard; FAILED_PRECONDITION when search is
+	// not enabled. Hits are limited to the workflows the caller may read.
+	SearchInstances(context.Context, *SearchRequest) (*SearchResult, error)
 	mustEmbedUnimplementedWiggleControlPlaneServer()
 }
 
@@ -303,6 +375,9 @@ func (UnimplementedWiggleControlPlaneServer) GetCluster(context.Context, *Empty)
 }
 func (UnimplementedWiggleControlPlaneServer) ListWorkflows(context.Context, *Empty) (*WorkflowNames, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListWorkflows not implemented")
+}
+func (UnimplementedWiggleControlPlaneServer) GetBacklogCoverage(context.Context, *BacklogCoverageRequest) (*BacklogCoverage, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetBacklogCoverage not implemented")
 }
 func (UnimplementedWiggleControlPlaneServer) RegisterWorkflow(context.Context, *WorkflowDefinition) (*RegisterWorkflowResult, error) {
 	return nil, status.Error(codes.Unimplemented, "method RegisterWorkflow not implemented")
@@ -337,8 +412,8 @@ func (UnimplementedWiggleControlPlaneServer) DeleteSchedule(context.Context, *Sc
 func (UnimplementedWiggleControlPlaneServer) PollTasks(context.Context, *PollRequest) (*TaskList, error) {
 	return nil, status.Error(codes.Unimplemented, "method PollTasks not implemented")
 }
-func (UnimplementedWiggleControlPlaneServer) CompleteTask(context.Context, *TaskResultRequest) (*Ack, error) {
-	return nil, status.Error(codes.Unimplemented, "method CompleteTask not implemented")
+func (UnimplementedWiggleControlPlaneServer) ReportSteps(context.Context, *ReportStepsRequest) (*ReportStepsResult, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportSteps not implemented")
 }
 func (UnimplementedWiggleControlPlaneServer) FailTask(context.Context, *TaskFailureRequest) (*Ack, error) {
 	return nil, status.Error(codes.Unimplemented, "method FailTask not implemented")
@@ -346,8 +421,17 @@ func (UnimplementedWiggleControlPlaneServer) FailTask(context.Context, *TaskFail
 func (UnimplementedWiggleControlPlaneServer) HeartbeatTask(context.Context, *HeartbeatRequest) (*HeartbeatResult, error) {
 	return nil, status.Error(codes.Unimplemented, "method HeartbeatTask not implemented")
 }
-func (UnimplementedWiggleControlPlaneServer) AdvanceRun(context.Context, *AdvanceRunRequest) (*AdvanceRunResult, error) {
-	return nil, status.Error(codes.Unimplemented, "method AdvanceRun not implemented")
+func (UnimplementedWiggleControlPlaneServer) PollEvents(context.Context, *PollEventsRequest) (*EventList, error) {
+	return nil, status.Error(codes.Unimplemented, "method PollEvents not implemented")
+}
+func (UnimplementedWiggleControlPlaneServer) AckEvents(context.Context, *AckEventsRequest) (*Ack, error) {
+	return nil, status.Error(codes.Unimplemented, "method AckEvents not implemented")
+}
+func (UnimplementedWiggleControlPlaneServer) GetStepStats(context.Context, *StepStatsRequest) (*StepStats, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetStepStats not implemented")
+}
+func (UnimplementedWiggleControlPlaneServer) SearchInstances(context.Context, *SearchRequest) (*SearchResult, error) {
+	return nil, status.Error(codes.Unimplemented, "method SearchInstances not implemented")
 }
 func (UnimplementedWiggleControlPlaneServer) mustEmbedUnimplementedWiggleControlPlaneServer() {}
 func (UnimplementedWiggleControlPlaneServer) testEmbeddedByValue()                            {}
@@ -420,6 +504,24 @@ func _WiggleControlPlane_ListWorkflows_Handler(srv interface{}, ctx context.Cont
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(WiggleControlPlaneServer).ListWorkflows(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WiggleControlPlane_GetBacklogCoverage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BacklogCoverageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WiggleControlPlaneServer).GetBacklogCoverage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WiggleControlPlane_GetBacklogCoverage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WiggleControlPlaneServer).GetBacklogCoverage(ctx, req.(*BacklogCoverageRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -622,20 +724,20 @@ func _WiggleControlPlane_PollTasks_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
-func _WiggleControlPlane_CompleteTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(TaskResultRequest)
+func _WiggleControlPlane_ReportSteps_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReportStepsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(WiggleControlPlaneServer).CompleteTask(ctx, in)
+		return srv.(WiggleControlPlaneServer).ReportSteps(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: WiggleControlPlane_CompleteTask_FullMethodName,
+		FullMethod: WiggleControlPlane_ReportSteps_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WiggleControlPlaneServer).CompleteTask(ctx, req.(*TaskResultRequest))
+		return srv.(WiggleControlPlaneServer).ReportSteps(ctx, req.(*ReportStepsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -676,20 +778,74 @@ func _WiggleControlPlane_HeartbeatTask_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
-func _WiggleControlPlane_AdvanceRun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AdvanceRunRequest)
+func _WiggleControlPlane_PollEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PollEventsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(WiggleControlPlaneServer).AdvanceRun(ctx, in)
+		return srv.(WiggleControlPlaneServer).PollEvents(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: WiggleControlPlane_AdvanceRun_FullMethodName,
+		FullMethod: WiggleControlPlane_PollEvents_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WiggleControlPlaneServer).AdvanceRun(ctx, req.(*AdvanceRunRequest))
+		return srv.(WiggleControlPlaneServer).PollEvents(ctx, req.(*PollEventsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WiggleControlPlane_AckEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AckEventsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WiggleControlPlaneServer).AckEvents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WiggleControlPlane_AckEvents_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WiggleControlPlaneServer).AckEvents(ctx, req.(*AckEventsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WiggleControlPlane_GetStepStats_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StepStatsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WiggleControlPlaneServer).GetStepStats(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WiggleControlPlane_GetStepStats_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WiggleControlPlaneServer).GetStepStats(ctx, req.(*StepStatsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WiggleControlPlane_SearchInstances_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SearchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WiggleControlPlaneServer).SearchInstances(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WiggleControlPlane_SearchInstances_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WiggleControlPlaneServer).SearchInstances(ctx, req.(*SearchRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -712,6 +868,10 @@ var WiggleControlPlane_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListWorkflows",
 			Handler:    _WiggleControlPlane_ListWorkflows_Handler,
+		},
+		{
+			MethodName: "GetBacklogCoverage",
+			Handler:    _WiggleControlPlane_GetBacklogCoverage_Handler,
 		},
 		{
 			MethodName: "RegisterWorkflow",
@@ -758,8 +918,8 @@ var WiggleControlPlane_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _WiggleControlPlane_PollTasks_Handler,
 		},
 		{
-			MethodName: "CompleteTask",
-			Handler:    _WiggleControlPlane_CompleteTask_Handler,
+			MethodName: "ReportSteps",
+			Handler:    _WiggleControlPlane_ReportSteps_Handler,
 		},
 		{
 			MethodName: "FailTask",
@@ -770,8 +930,20 @@ var WiggleControlPlane_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _WiggleControlPlane_HeartbeatTask_Handler,
 		},
 		{
-			MethodName: "AdvanceRun",
-			Handler:    _WiggleControlPlane_AdvanceRun_Handler,
+			MethodName: "PollEvents",
+			Handler:    _WiggleControlPlane_PollEvents_Handler,
+		},
+		{
+			MethodName: "AckEvents",
+			Handler:    _WiggleControlPlane_AckEvents_Handler,
+		},
+		{
+			MethodName: "GetStepStats",
+			Handler:    _WiggleControlPlane_GetStepStats_Handler,
+		},
+		{
+			MethodName: "SearchInstances",
+			Handler:    _WiggleControlPlane_SearchInstances_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
