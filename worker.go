@@ -24,14 +24,16 @@ type claim struct{ workflow, step, kind string }
 // WorkerOption tunes a Worker.
 type WorkerOption func(*Worker)
 
-// Concurrency sets the maximum steps in flight (default: NumCPU).
-func Concurrency(n int) WorkerOption { return func(w *Worker) { w.concurrency = n } }
+// WithConcurrency sets the maximum steps in flight (default: NumCPU).
+func WithConcurrency(n int) WorkerOption { return func(w *Worker) { w.concurrency = n } }
 
-// Lease sets how long a claimed step may run before the server reclaims it (default 30s).
-func Lease(d time.Duration) WorkerOption { return func(w *Worker) { w.leaseMillis = d.Milliseconds() } }
+// WithLease sets how long a claimed step may run before the server reclaims it (default 30s).
+func WithLease(d time.Duration) WorkerOption {
+	return func(w *Worker) { w.leaseMillis = d.Milliseconds() }
+}
 
-// Queues restricts the worker to the given queues (else it serves every queue it learns about).
-func Queues(names ...string) WorkerOption {
+// WithQueues restricts the worker to the given queues (else it serves every queue it learns about).
+func WithQueues(names ...string) WorkerOption {
 	return func(w *Worker) {
 		w.explicitQueues = map[string]bool{}
 		for _, n := range names {
@@ -46,9 +48,9 @@ func WithCriteria(cs ...criteria.QueueCriteria) WorkerOption {
 	return func(w *Worker) { w.criteria = append(w.criteria, cs...) }
 }
 
-// AwaitRegistration makes Start wait up to d for a Handle-bound workflow's graph to appear before
+// WithAwaitRegistration makes Start wait up to d for a Handle-bound workflow's graph to appear before
 // failing (rides out a registration race). Zero fails fast.
-func AwaitRegistration(d time.Duration) WorkerOption {
+func WithAwaitRegistration(d time.Duration) WorkerOption {
 	return func(w *Worker) { w.awaitRegistration = d }
 }
 
@@ -179,7 +181,7 @@ func (w *Worker) HandleItem(workflow, step string, fn ItemActivity) *Worker {
 
 // BranchSteps declares steps of workflow that only branches created at run time run
 // (s.Create(...).ThenApply(step)), so they are in no registered graph. Their handlers -- bound with
-// Handle and its siblings, or methods of a RegisterHandlers struct -- are then not matched against
+// Handle and its siblings, or methods of a RegisterHandler struct -- are then not matched against
 // the graph on Start, but bound when such a step is first dispatched. A branch step on a queue no
 // graph mentions runs only on a worker that polls that queue (Queues or WithCriteria).
 func (w *Worker) BranchSteps(workflow string, steps ...string) *Worker {
@@ -373,7 +375,7 @@ func (w *Worker) fetchGraph(ctx context.Context, workflow string) (map[string]an
 			continue
 		}
 		return nil, fmt.Errorf("workflow %q is not registered; register its graph before starting a "+
-			"worker that binds handlers to it (or set AwaitRegistration): %w", workflow, err)
+			"worker that binds handlers to it (or set WithAwaitRegistration): %w", workflow, err)
 	}
 }
 
@@ -523,7 +525,7 @@ func isCreatedNode(nodeID string) bool { return strings.HasPrefix(nodeID, "~") }
 
 // handlerFor is the handler for task. A step on a created node is in no graph, so it binds by name
 // on first dispatch -- from a Handle binding of a declared branch step, or a method of a
-// RegisterHandlers struct -- and so does its undo, which may run on a worker that never ran the
+// RegisterHandler struct -- and so does its undo, which may run on a worker that never ran the
 // step. It fails when the handler does not fit the dispatched step.
 func (w *Worker) handlerFor(task *Task) (activityHandler, error) {
 	h := w.handlers[task.Activity]

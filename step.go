@@ -94,8 +94,8 @@ func (s *StepRun) drain() ([]EmittedEvent, []*CreatedBranch, error) {
 	events, created := s.emitted, s.created
 	s.emitted, s.created = nil, nil
 	for _, b := range created {
-		if b.err != nil {
-			return nil, nil, b.err
+		if err := b.Err(); err != nil {
+			return nil, nil, err
 		}
 	}
 	return events, created, nil

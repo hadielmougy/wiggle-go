@@ -63,7 +63,7 @@ func TestIntegrationForEach(t *testing.T) {
 	client, ctx := dialTest(t)
 	name := uniqueName("go-it-each")
 	wf := wiggle.Graph{Name: name, Steps: []wiggle.Node{
-		wiggle.ForEach{Name: "doubled", Over: "xs", Body: []wiggle.Node{wiggle.Step{Name: "double"}}, Combine: "sum"},
+		wiggle.ForEach{Name: "doubled", ItemsKey: "xs", Body: []wiggle.Node{wiggle.Step{Name: "double"}}, Combine: "sum"},
 	}}.MustCompile()
 	w := wiggle.NewWorker(client, "it-each").
 		HandleItem(name, "double", func(base wiggle.Context, item any) (any, error) {

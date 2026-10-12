@@ -57,7 +57,7 @@ func (c *Client) AckEvents(ctx context.Context, consumer, cursor string) error {
 	return err
 }
 
-// SearchQuery filters SearchInstances. Text's every word must occur in the instance's correlation
+// SearchQuery filters Search. Text's every word must occur in the instance's correlation
 // id, context, termination reason or error; Semantic ranks by meaning instead.
 type SearchQuery struct {
 	Text                   string
@@ -85,9 +85,9 @@ type SearchResult struct {
 	Model   string // the embedding model a semantic search used
 }
 
-// SearchInstances searches instances across every search shard. FAILED_PRECONDITION when search is
+// Search searches instances across every search shard. FAILED_PRECONDITION when search is
 // not enabled on the server.
-func (c *Client) SearchInstances(ctx context.Context, q SearchQuery) (*SearchResult, error) {
+func (c *Client) Search(ctx context.Context, q SearchQuery) (*SearchResult, error) {
 	req := &pb.SearchRequest{Text: q.Text, UpdatedFrom: q.UpdatedFrom, UpdatedTo: q.UpdatedTo, Limit: q.Limit,
 		PartialOk: q.PartialOK, Semantic: q.Semantic}
 	if q.Workflow != "" {

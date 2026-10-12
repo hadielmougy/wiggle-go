@@ -418,7 +418,7 @@ func criteriaProto(c criteria.QueueCriteria) *pb.QueueCriteria {
 func predicateProto(p criteria.Predicate) *pb.CriteriaPredicate {
 	switch x := p.(type) {
 	case criteria.Comparison:
-		cmp := &pb.CriteriaComparison{Field: x.Field.Name, Op: x.Op, Attribute: x.Field.Attribute}
+		cmp := &pb.CriteriaComparison{Field: x.Attribute.Field, Op: x.Op, Attribute: x.Attribute.Name}
 		for _, a := range x.Args {
 			l := &pb.CriteriaLiteral{}
 			switch v := a.(type) {

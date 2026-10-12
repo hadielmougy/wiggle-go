@@ -45,7 +45,7 @@ func TestInvalidCriteria(t *testing.T) {
 		"text field, integer literal": Equal(Workflow, 3),
 		"integer field, text literal": LessThan(Attempt, "3"),
 		"like on an integer":          Like(Attempt, "1%"),
-		"arity":                       Comparison{Field: Version, Op: "BETWEEN", Args: []any{int64(1)}},
+		"arity":                       Comparison{Attribute: Version, Op: "BETWEEN", Args: []any{int64(1)}},
 		"mixed attribute types":       In(Attr("x"), "a", 1),
 		"ordering a boolean":          LessThan(Attr("flag"), true),
 		"past the decimal scale":      Equal(Attr("x"), Decimal("1.12345678901")),

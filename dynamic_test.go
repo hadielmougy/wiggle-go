@@ -36,7 +36,7 @@ func TestASpawningStepCompilesToADynamicJoinAndASpawnCombine(t *testing.T) {
 func TestDeclaredAttributesRideTheDefinition(t *testing.T) {
 	plain := Graph{Name: "wf", Steps: []Node{Step{Name: "a"}}}.MustCompile()
 	withAttr := Graph{Name: "wf", Steps: []Node{Step{Name: "a"}},
-		Attributes: []Attribute{{Name: "tier", Type: "STRING", Path: "customer.tier"}}}.MustCompile()
+		Attributes: []DispatchAttribute{{Name: "tier", Type: "STRING", Path: "customer.tier"}}}.MustCompile()
 	want := []any{map[string]any{"name": "tier", "type": "STRING", "path": "customer.tier"}}
 	if !reflect.DeepEqual(withAttr.Definition["attributes"], want) || plain.Definition["attributes"] != nil {
 		t.Fatalf("attributes = %v", withAttr.Definition["attributes"])
@@ -44,8 +44,8 @@ func TestDeclaredAttributesRideTheDefinition(t *testing.T) {
 	if plain.Version == withAttr.Version {
 		t.Fatal("declaring an attribute must change the content version")
 	}
-	for _, a := range []Attribute{{"Tier", "STRING", "x"}, {"tier", "TEXT", "x"}, {"tier", "STRING", "a..b"}} {
-		if _, err := (Graph{Name: "wf", Steps: []Node{Step{Name: "a"}}, Attributes: []Attribute{a}}).Compile(); err == nil {
+	for _, a := range []DispatchAttribute{{"Tier", "STRING", "x"}, {"tier", "TEXT", "x"}, {"tier", "STRING", "a..b"}} {
+		if _, err := (Graph{Name: "wf", Steps: []Node{Step{Name: "a"}}, Attributes: []DispatchAttribute{a}}).Compile(); err == nil {
 			t.Errorf("%+v was accepted", a)
 		}
 	}
@@ -54,13 +54,14 @@ func TestDeclaredAttributesRideTheDefinition(t *testing.T) {
 func TestBranchWireForm(t *testing.T) {
 	run := &StepRun{creates: true}
 	run.CreateKeyed("k", map[string]any{"x": 1.0}).
-		ThenApply("reserve", OnQueue("stock"), WithRetry(RetryNone()), Compensable()).
+		ThenApplyCompensable("reserve", OnQueue("stock"), WithRetry(RetryNone())).
 		Combine("packed").
 		ThenFilter("ok").
 		ThenSleep(5*time.Millisecond).
 		ThenAwait("go", 2*time.Second, func(e *CreatedBranch) { e.ThenApply("escalate") }).
 		ThenSubFlow("ship", "shipping").
-		ThenAllOf("settle", func(a *CreatedBranch) { a.ThenApply("pay") }, func(a *CreatedBranch) { a.ThenFilter("check") }).
+		ThenAllOf(func(a *CreatedBranch) { a.ThenApply("pay") }, func(a *CreatedBranch) { a.ThenFilter("check") }).
+		Combine("settle").
 		RepeatWhile("more", 4, func(b *CreatedBranch) { b.ThenApply("inc") }).
 		ThenOneOf(When("bulk", func(b *CreatedBranch) { b.ThenApply("b") }), Otherwise(nil))
 	_, created, err := run.drain()
@@ -101,19 +102,21 @@ func TestBranchMistakesFailTheStep(t *testing.T) {
 	for name, build := range map[string]func(*CreatedBranch){
 		"combine with nothing to spawn": func(b *CreatedBranch) { b.Combine("x") },
 		"a gate cannot spawn":           func(b *CreatedBranch) { b.ThenFilter("g").Combine("x") },
-		"one arm":                       func(b *CreatedBranch) { b.ThenAllOf("x", func(a *CreatedBranch) { a.ThenApply("a") }) },
+		"one arm":                       func(b *CreatedBranch) { b.ThenAllOf(func(a *CreatedBranch) { a.ThenApply("a") }).Combine("x") },
 		"arms with one name": func(b *CreatedBranch) {
-			b.ThenAllOf("x", func(a *CreatedBranch) { a.ThenApply("a") }, func(a *CreatedBranch) { a.ThenApply("a") })
+			b.ThenAllOf(func(a *CreatedBranch) { a.ThenApply("a") }, func(a *CreatedBranch) { a.ThenApply("a") }).Combine("x")
 		},
 		"an arm ending in a sleep": func(b *CreatedBranch) {
-			b.ThenAllOf("x", func(a *CreatedBranch) { a.ThenApply("a") }, func(a *CreatedBranch) { a.ThenSleep(time.Second) })
+			b.ThenAllOf(func(a *CreatedBranch) { a.ThenApply("a") }, func(a *CreatedBranch) { a.ThenSleep(time.Second) }).Combine("x")
 		},
 		"otherwise first":      func(b *CreatedBranch) { b.ThenOneOf(Otherwise(nil)) },
 		"otherwise not last":   func(b *CreatedBranch) { b.ThenOneOf(When("g", nil), Otherwise(nil), When("h", nil)) },
 		"an empty loop":        func(b *CreatedBranch) { b.RepeatWhile("more", 0, nil) },
 		"escalation, no limit": func(b *CreatedBranch) { b.ThenAwait("go", 0, func(e *CreatedBranch) { e.ThenApply("x") }) },
 		"a negative sleep":     func(b *CreatedBranch) { b.ThenSleep(-time.Second) },
-		"a compensable gate":   func(b *CreatedBranch) { b.ThenFilter("g", Compensable()) },
+		"arms with no combine": func(b *CreatedBranch) {
+			b.ThenAllOf(func(a *CreatedBranch) { a.ThenApply("a") }, func(a *CreatedBranch) { a.ThenApply("b") })
+		},
 	} {
 		run := &StepRun{creates: true}
 		build(run.Create(nil))
@@ -139,7 +142,7 @@ func (spawnHandlers) Ok(Context) (bool, error)             { return true, nil }
 
 func TestBranchStepsAreBoundOnDispatchNotAgainstTheGraph(t *testing.T) {
 	graph := Graph{Name: "wf", Steps: []Node{Step{Name: "fan", Combine: "gather"}}}.MustCompile().Definition
-	w := NewWorker(nil, "w").RegisterHandlers("wf", spawnHandlers{})
+	w := NewWorker(nil, "w").RegisterHandler("wf", spawnHandlers{})
 	set := w.handlerSets[0]
 	if _, err := bindHandlerSet(graph, set); err == nil {
 		t.Fatal("an undeclared method matching no step must still be refused")

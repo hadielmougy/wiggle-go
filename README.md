@@ -109,7 +109,7 @@ wf := wiggle.Graph{
 | `Effect{Name, Queue, Retry, Compensate}` | a side-effect step (`HandleEffect`); context unchanged |
 | `Gate{Name, Queue, Retry}` | a predicate (`HandleGate`); false ends the instance as `gated:<name>` |
 | `Fork{Branches, Combine}` | run branches in parallel on isolated context copies, then rejoin at the **mandatory** `Combine` step (`HandleCombine`) — no implicit fold |
-| `ForEach{Name, Over, Body, Combine}` | runtime fan-out: one **isolated** branch per element of the list (or map) at `Over`. **The element IS the item's context** — body steps are bound with `HandleItem(base, item)` and their return replaces the item's value (scalars included). The **mandatory** `Combine` handler receives every item's final value collected under `Name` (a list, or a map keyed like the input) and returns the complete post-join context |
+| `ForEach{Name, ItemsKey, Body, Combine}` | runtime fan-out: one **isolated** branch per element of the list (or map) at `ItemsKey`. **The element IS the item's context** — body steps are bound with `HandleItem(base, item)` and their return replaces the item's value (scalars included). The **mandatory** `Combine` handler receives every item's final value collected under `Name` (a list, or a map keyed like the input) and returns the complete post-join context |
 | `Choose{Cases}` | exclusive choice: the first `Case` whose `When` guard holds runs; a `Case` with no `When` is the otherwise (last) |
 | `DoWhile{While, Body}` | run `Body`, then repeat while the `While` predicate holds (body runs at least once) |
 | `SubWorkflow{Name, Workflow}` | run another workflow as a child; its result merges back |
@@ -138,8 +138,8 @@ worker.HandleCombine("order", "merge", func(ctx wiggle.Context) (wiggle.Context,
 })
 ```
 
-Per-step: `Queue` (defaults to `DefaultQueue`, else the workflow name) and `Retry`
-(`RetryExponential/RetryFixed/RetryNone/RetryForever`). `Branch{Name, Steps}` and `Case{When, Then}`
+Per-step: `Queue` (defaults to `DefaultQueue`, else the workflow name) and `Retry`, a
+`RetryPolicy` (`RetryExponential/RetryFixed/RetryNone/RetryForever`). `Branch{Name, Steps}` and `Case{When, Then}`
 are themselves declarative slices of `Node`, so branches and bodies nest arbitrarily.
 
 ## Compensation (sagas)
@@ -157,7 +157,7 @@ w.Handle("order", "reserve", reserve).
     })
 ```
 
-On a `RegisterHandlers` struct the compensator is a method named `Compensate<Step>` with the shape
+On a `RegisterHandler` struct the compensator is a method named `Compensate<Step>` with the shape
 `func(wiggle.Compensation) error` (`CompensateReserve` undoes `reserve`). The pairing is checked
 both ways at start: a compensable step served without its compensator — or a compensator targeting
 a non-compensable step — refuses to bind. Compensators are at-least-once like every handler; make
@@ -179,10 +179,10 @@ worker.Start(ctx) // reconciles against the registered graph, discovering the qu
 
 `Handle` (task), `HandleGate` (predicate), and `HandleEffect` (side effect) bind by name. On `Start`
 the worker reconciles: it verifies each step exists and is the right kind (a typo fails fast with the
-available step names) and discovers which queue each step polls. Pass `AwaitRegistration(d)` to ride
+available step names) and discovers which queue each step polls. Pass `WithAwaitRegistration(d)` to ride
 out a registration race.
 
-### A struct of handlers: `RegisterHandlers`
+### A struct of handlers: `RegisterHandler`
 
 Instead of one `Handle(...)` call per step, hand the worker a struct whose methods *are* the steps —
 matched by name, with the **Go signature picking the kind**:
@@ -201,7 +201,7 @@ func (OrderHandlers) Notify(o wiggle.Context) error {                     // -> 
 	fmt.Println("shipped", o["orderId"]); return nil
 }
 
-worker := wiggle.NewWorker(client, "orders").RegisterHandlers("order", OrderHandlers{})
+worker := wiggle.NewWorker(client, "orders").RegisterHandler("order", OrderHandlers{})
 worker.Start(ctx)
 ```
 
@@ -210,7 +210,7 @@ Each exported method shaped like a handler — `func(Context)(Context,error)` or
 `func(Context)(bool,error)` (gate), or `func(Context)error` (effect) — is matched to a step of the
 named workflow **by case-insensitive name** (`InStock` ↔ `in-stock`) on `Start`. The graph confirms
 the exact name and the kind, so a signature that contradicts it (a task method for a gate step) fails
-fast. Two method names that collide under case-folding panic at `RegisterHandlers`; methods of any
+fast. Two method names that collide under case-folding panic at `RegisterHandler`; methods of any
 other shape are ignored, so helpers can live on the struct. Pass a pointer (`&OrderHandlers{}`) if your
 methods use pointer receivers.
 
@@ -232,7 +232,7 @@ Register(ctx, flowSpec, wiggle.Force())                  // replace a differing 
 GetWorkflowVersion(ctx, name, version)
 PollEvents(ctx, consumer, max, wait, startFrom) (*EventBatch, error)   // the durable event log
 AckEvents(ctx, consumer, cursor)
-SearchInstances(ctx, SearchQuery{...}) (*SearchResult, error)          // needs search shards
+Search(ctx, SearchQuery{...}) (*SearchResult, error)                   // needs search shards
 StepStats(ctx, workflow, version) (*StepStats, error)                  // per-step duration and queue-wait percentiles
 BacklogCoverage(ctx, max) ([]BacklogSlice, livePollers, error)
 // worker RPCs: Poll / ReportSteps / Fail / Heartbeat
@@ -240,7 +240,7 @@ BacklogCoverage(ctx, max) ([]BacklogSlice, livePollers, error)
 
 ## Step metadata and events
 
-A handler bound with `HandleStep` (or a `RegisterHandlers` method shaped
+A handler bound with `HandleStep` (or a `RegisterHandler` method shaped
 `func(*wiggle.StepRun, wiggle.Context) (wiggle.Context, error)`) also receives the running step:
 
 ```go
@@ -286,17 +286,17 @@ w := wiggle.NewWorker(client, "w1").
 	})
 ```
 
-A `*CreatedBranch` offers `ThenApply`, `ThenAccept`, `ThenFilter` (a false gate ends the branch),
+A `*CreatedBranch` offers `ThenApply`, `ThenApplyCompensable` (declares an undo), `ThenAccept`, `ThenFilter` (a false gate ends the branch),
 `ThenSleep`, `ThenAwait(signal, timeout, escalation)`, `ThenSubFlow(node, workflow)`,
-`ThenAllOf(combine, arms...)`, `RepeatWhile(condition, maxIterations, body)` and
-`ThenOneOf(When(guard, chain)..., Otherwise(chain))`. Steps take `OnQueue`, `WithRetry` and
-`Compensable()` options; otherwise a step uses the creating step's queue and retry policy.
+`ThenAllOf(arms...).Combine(name)`, `RepeatWhile(condition, maxIterations, body)` and
+`ThenOneOf(When(guard, chain)..., Otherwise(chain))`. Steps take `OnQueue` and `WithRetry`
+options; otherwise a step uses the creating step's queue and retry policy.
 `.Combine(name)` after a branch task makes that task spawn too, so branches nest. A combine may
 itself `Create`, which starts another round. A chain built wrongly, or `Create` outside a spawning
 step or its combine, fails the step without a retry.
 
 Branch-only steps are in no registered graph, so declare them with `Worker.BranchSteps`, or give a
-`RegisterHandlers` struct a `BranchSteps() []string` method. They are then bound by name the first
+`RegisterHandler` struct a `BranchSteps() []string` method. They are then bound by name the first
 time one is dispatched. A branch step on a queue no graph mentions runs only on a worker that polls
 that queue.
 
@@ -308,7 +308,7 @@ from its context.
 
 ```go
 wf := wiggle.Graph{Name: "orders", Steps: []wiggle.Node{wiggle.Step{Name: "charge", Queue: "payments"}},
-	Attributes: []wiggle.Attribute{{Name: "tier", Type: "STRING", Path: "customer.tier"}}}.MustCompile()
+	Attributes: []wiggle.DispatchAttribute{{Name: "tier", Type: "STRING", Path: "customer.tier"}}}.MustCompile()
 
 gold, err := criteria.New("payments", criteria.And(
 	criteria.Equal(criteria.Attr("tier"), "gold"),
@@ -317,9 +317,9 @@ w := wiggle.NewWorker(client, "gold-1", wiggle.WithCriteria(gold)).Handle("order
 ```
 
 Package `criteria` (`github.com/hadielmougy/wiggle-go/criteria`) offers `Equal`, `NotEqual`, `In`,
-`LessThan(OrEqual)`, `GreaterThan(OrEqual)`, `Between`, `Like`, `IsNull` and `IsNotNull`, combined with
+`LessThan(OrEqualTo)`, `GreaterThan(OrEqualTo)`, `Between`, `Like`, `IsNull` and `IsNotNull`, combined with
 `And`, `Or` and `Not`. A comparison on an absent value is false. `criteria.New` checks a predicate
-against the server's limits. `WithCriteria` replaces `Queues`. `Client.BacklogCoverage` shows ready
+against the server's limits. `WithCriteria` replaces `WithQueues`. `Client.BacklogCoverage` shows ready
 work no live worker's criteria would claim.
 
 ## Testing

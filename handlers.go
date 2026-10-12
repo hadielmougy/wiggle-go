@@ -9,7 +9,7 @@ import (
 	"unicode"
 )
 
-// A struct passed to Worker.RegisterHandlers implements a workflow's steps as methods. Each exported
+// A struct passed to Worker.RegisterHandler implements a workflow's steps as methods. Each exported
 // method shaped like a handler is matched to a step by name; its Go signature picks the kind:
 //
 //	func(Context) (Context, error)  -> a task    (returns the complete next context)
@@ -53,7 +53,7 @@ type handlerSet struct {
 	branch       map[string]bool             // canonical names of steps only created branches run
 }
 
-// BranchStepper is implemented by a RegisterHandlers struct whose methods include steps only
+// BranchStepper is implemented by a RegisterHandler struct whose methods include steps only
 // branches created at run time run; it declares them as Worker.BranchSteps does.
 type BranchStepper interface {
 	BranchSteps() []string
@@ -76,16 +76,16 @@ func canonicalName(s string) string {
 	return b.String()
 }
 
-// RegisterHandlers binds every handler-shaped method of handlers as a step of workflow, matched by
+// RegisterHandler binds every handler-shaped method of handlers as a step of workflow, matched by
 // name on Start (so a method InStock implements a step named "in-stock"), the graph confirming the
 // exact name and kind. It panics if two method names collide under case-folding (ambiguous), or if
 // handlers exposes no handler method. Pass a pointer if your methods use pointer receivers.
-func (w *Worker) RegisterHandlers(workflow string, handlers any) *Worker {
+func (w *Worker) RegisterHandler(workflow string, handlers any) *Worker {
 	if workflow == "" {
-		panic("RegisterHandlers: workflow is required")
+		panic("RegisterHandler: workflow is required")
 	}
 	if handlers == nil {
-		panic("RegisterHandlers: handlers is nil")
+		panic("RegisterHandler: handlers is nil")
 	}
 	set := handlerSet{workflow: workflow,
 		candidates:   map[string]handlerCandidate{},
@@ -97,7 +97,7 @@ func (w *Worker) RegisterHandlers(workflow string, handlers any) *Worker {
 		if target, fn, isComp := asCompensatorCandidate(name, v.Method(i)); isComp {
 			canon := canonicalName(target)
 			if prev, dup := set.compensators[canon]; dup {
-				panic(fmt.Sprintf("RegisterHandlers: compensators %q and %q both target step %q",
+				panic(fmt.Sprintf("RegisterHandler: compensators %q and %q both target step %q",
 					prev.name, name, canon))
 			}
 			set.compensators[canon] = compCandidate{name, fn}
@@ -115,13 +115,13 @@ func (w *Worker) RegisterHandlers(workflow string, handlers any) *Worker {
 			continue
 		}
 		if prev, dup := set.candidates[canon]; dup {
-			panic(fmt.Sprintf("RegisterHandlers: methods %q and %q map to the same step name %q; "+
+			panic(fmt.Sprintf("RegisterHandler: methods %q and %q map to the same step name %q; "+
 				"names differing only in case/style are ambiguous", prev.name, name, canon))
 		}
 		set.candidates[canon] = cand
 	}
 	if len(set.candidates) == 0 && len(set.compensators) == 0 {
-		panic(fmt.Sprintf("RegisterHandlers: %T exposes no handler methods (want a method shaped like "+
+		panic(fmt.Sprintf("RegisterHandler: %T exposes no handler methods (want a method shaped like "+
 			"func(Context)(Context,error), func(Context)(bool,error), or func(Context)error)", handlers))
 	}
 	if bs, ok := handlers.(BranchStepper); ok {
@@ -252,7 +252,7 @@ type binding struct {
 	item     ItemActivity
 }
 
-// matchHandlerSet resolves a RegisterHandlers set against the registered graph (fetched here --
+// matchHandlerSet resolves a RegisterHandler set against the registered graph (fetched here --
 // the binder itself is pure), then installs the resulting bindings.
 func (w *Worker) matchHandlerSet(ctx context.Context, set handlerSet) error {
 	graph, err := w.fetchGraph(ctx, set.workflow)

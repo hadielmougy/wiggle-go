@@ -30,30 +30,30 @@ const (
 	MaxIntegerDigits = 28
 )
 
-// Field is a task property a comparison tests. Attribute names a declared attribute (field
-// ATTRIBUTE) and is empty for every other field.
-type Field struct {
-	Name      string
-	Type      string // TEXT | INTEGER | ANY
-	Attribute string
+// Attribute is a task property a comparison tests: Field is the property, and Name names a
+// declared attribute (field ATTRIBUTE) and is empty for every other field.
+type Attribute struct {
+	Field string
+	Name  string
+	Type  string // TEXT | INTEGER | ANY
 }
 
 // The task properties criteria can test.
 var (
-	Workflow          = Field{Name: "WORKFLOW", Type: "TEXT"}
-	Version           = Field{Name: "VERSION", Type: "INTEGER"}
-	Step              = Field{Name: "STEP", Type: "TEXT"} // Equal, NotEqual and In only
-	NodeID            = Field{Name: "NODE_ID", Type: "TEXT"}
-	Kind              = Field{Name: "KIND", Type: "TEXT"} // TASK or PREDICATE
-	Attempt           = Field{Name: "ATTEMPT", Type: "INTEGER"}
-	CorrelationID     = Field{Name: "CORRELATION_ID", Type: "TEXT"}
-	InstanceCreatedAt = Field{Name: "INSTANCE_CREATED_AT", Type: "INTEGER"} // epoch millis, or a time.Time
+	Workflow          = Attribute{Field: "WORKFLOW", Type: "TEXT"}
+	Version           = Attribute{Field: "VERSION", Type: "INTEGER"}
+	Step              = Attribute{Field: "STEP", Type: "TEXT"} // Equal, NotEqual and In only
+	NodeID            = Attribute{Field: "NODE_ID", Type: "TEXT"}
+	Kind              = Attribute{Field: "KIND", Type: "TEXT"} // TASK or PREDICATE
+	Attempt           = Attribute{Field: "ATTEMPT", Type: "INTEGER"}
+	CorrelationID     = Attribute{Field: "CORRELATION_ID", Type: "TEXT"}
+	InstanceCreatedAt = Attribute{Field: "INSTANCE_CREATED_AT", Type: "INTEGER"} // epoch millis, or a time.Time
 )
 
 var attributeName = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
 
 // Attr is a value the workflow declares (wiggle.Graph{Attributes: ...}).
-func Attr(name string) Field { return Field{Name: "ATTRIBUTE", Type: "ANY", Attribute: name} }
+func Attr(name string) Attribute { return Attribute{Field: "ATTRIBUTE", Name: name, Type: "ANY"} }
 
 // Decimal is an exact decimal literal for an attribute comparison, as its decimal text ("12.50").
 type Decimal string
@@ -63,9 +63,9 @@ type Predicate interface{ isPredicate() }
 
 // Comparison tests one field. Args hold string, int64, Decimal or bool literals.
 type Comparison struct {
-	Field Field
-	Op    string
-	Args  []any
+	Attribute Attribute
+	Op        string
+	Args      []any
 }
 
 // AllOf holds when every term does.
@@ -82,12 +82,12 @@ func (AllOf) isPredicate()      {}
 func (AnyOf) isPredicate()      {}
 func (Negated) isPredicate()    {}
 
-func cmp(f Field, op string, values ...any) Predicate {
+func cmp(a Attribute, op string, values ...any) Predicate {
 	args := make([]any, len(values))
 	for i, v := range values {
 		args[i] = literal(v)
 	}
-	return Comparison{Field: f, Op: op, Args: args}
+	return Comparison{Attribute: a, Op: op, Args: args}
 }
 
 func literal(v any) any {
@@ -116,22 +116,22 @@ func literal(v any) any {
 	return v
 }
 
-func Equal(f Field, v any) Predicate              { return cmp(f, "EQUAL", v) }
-func NotEqual(f Field, v any) Predicate           { return cmp(f, "NOT_EQUAL", v) }
-func In(f Field, vs ...any) Predicate             { return cmp(f, "IN", vs...) }
-func LessThan(f Field, v any) Predicate           { return cmp(f, "LESS_THAN", v) }
-func LessThanOrEqual(f Field, v any) Predicate    { return cmp(f, "LESS_THAN_OR_EQUAL", v) }
-func GreaterThan(f Field, v any) Predicate        { return cmp(f, "GREATER_THAN", v) }
-func GreaterThanOrEqual(f Field, v any) Predicate { return cmp(f, "GREATER_THAN_OR_EQUAL", v) }
-func Between(f Field, low, high any) Predicate    { return cmp(f, "BETWEEN", low, high) }
+func Equal(a Attribute, v any) Predicate                { return cmp(a, "EQUAL", v) }
+func NotEqual(a Attribute, v any) Predicate             { return cmp(a, "NOT_EQUAL", v) }
+func In(a Attribute, vs ...any) Predicate               { return cmp(a, "IN", vs...) }
+func LessThan(a Attribute, v any) Predicate             { return cmp(a, "LESS_THAN", v) }
+func LessThanOrEqualTo(a Attribute, v any) Predicate    { return cmp(a, "LESS_THAN_OR_EQUAL", v) }
+func GreaterThan(a Attribute, v any) Predicate          { return cmp(a, "GREATER_THAN", v) }
+func GreaterThanOrEqualTo(a Attribute, v any) Predicate { return cmp(a, "GREATER_THAN_OR_EQUAL", v) }
+func Between(a Attribute, low, high any) Predicate      { return cmp(a, "BETWEEN", low, high) }
 
 // Like matches with % and _ wildcards and \ escapes; case-sensitive.
-func Like(f Field, pattern string) Predicate { return cmp(f, "LIKE", pattern) }
-func IsNull(f Field) Predicate               { return cmp(f, "IS_NULL") }
-func IsNotNull(f Field) Predicate            { return cmp(f, "IS_NOT_NULL") }
-func And(terms ...Predicate) Predicate       { return AllOf{Terms: terms} }
-func Or(terms ...Predicate) Predicate        { return AnyOf{Terms: terms} }
-func Not(term Predicate) Predicate           { return Negated{Term: term} }
+func Like(a Attribute, pattern string) Predicate { return cmp(a, "LIKE", pattern) }
+func IsNull(a Attribute) Predicate               { return cmp(a, "IS_NULL") }
+func IsNotNull(a Attribute) Predicate            { return cmp(a, "IS_NOT_NULL") }
+func And(terms ...Predicate) Predicate           { return AllOf{Terms: terms} }
+func Or(terms ...Predicate) Predicate            { return AnyOf{Terms: terms} }
+func Not(term Predicate) Predicate               { return Negated{Term: term} }
 
 // QueueCriteria is what a poll may claim from Queue: its ready tasks for which Where holds (all of
 // them when Where is nil). A worker serving several queues holds one per queue.
@@ -206,17 +206,17 @@ func validateTerms(what string, terms []Predicate, depth int, nodes *int) error 
 	return nil
 }
 
-func label(f Field) string {
-	if f.Attribute != "" {
-		return fmt.Sprintf("attribute %q", f.Attribute)
+func label(a Attribute) string {
+	if a.Name != "" {
+		return fmt.Sprintf("attribute %q", a.Name)
 	}
-	return f.Name
+	return a.Field
 }
 
 func validateComparison(c Comparison) error {
-	f := c.Field
-	if f.Name == "ATTRIBUTE" && !attributeName.MatchString(f.Attribute) {
-		return fmt.Errorf("attribute %q is not a valid attribute name", f.Attribute)
+	f := c.Attribute
+	if f.Field == "ATTRIBUTE" && !attributeName.MatchString(f.Name) {
+		return fmt.Errorf("attribute %q is not a valid attribute name", f.Name)
 	}
 	bounds, known := arity[c.Op]
 	if !known {
@@ -225,11 +225,11 @@ func validateComparison(c Comparison) error {
 	if n := len(c.Args); n < bounds[0] || n > bounds[1] {
 		return fmt.Errorf("%s %s takes %d..%d argument(s), got %d", label(f), c.Op, bounds[0], bounds[1], n)
 	}
-	if f.Name == "STEP" && c.Op != "EQUAL" && c.Op != "NOT_EQUAL" && c.Op != "IN" {
+	if f.Field == "STEP" && c.Op != "EQUAL" && c.Op != "NOT_EQUAL" && c.Op != "IN" {
 		return fmt.Errorf("STEP supports Equal, NotEqual and In only, not %s", c.Op)
 	}
 	if c.Op == "LIKE" && f.Type == "INTEGER" {
-		return fmt.Errorf("Like needs a text field, not %s", f.Name)
+		return fmt.Errorf("Like needs a text field, not %s", f.Field)
 	}
 	kinds := map[string]bool{}
 	for _, a := range c.Args {
@@ -256,10 +256,10 @@ func validateComparison(c Comparison) error {
 			return fmt.Errorf("%s takes text, an integer, a Decimal or a bool, got %T", label(f), a)
 		}
 		if f.Type == "TEXT" && kind != "text" {
-			return fmt.Errorf("%s takes text, got %T", f.Name, a)
+			return fmt.Errorf("%s takes text, got %T", f.Field, a)
 		}
 		if f.Type == "INTEGER" && kind != "integer" {
-			return fmt.Errorf("%s takes an integer, got %T", f.Name, a)
+			return fmt.Errorf("%s takes an integer, got %T", f.Field, a)
 		}
 		kinds[kind] = true
 	}

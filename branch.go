@@ -24,6 +24,8 @@ type CreatedBranch struct {
 	keyed bool
 	steps []branchStep
 	err   error
+	// allOfPending is set between ThenAllOf and its Combine.
+	allOfPending bool
 }
 
 type branchStep struct {
@@ -31,7 +33,7 @@ type branchStep struct {
 	kind        string
 	compensable bool
 	queue       string
-	retry       *Retry
+	retry       *RetryPolicy
 	sleepMillis int64
 	combine     string
 	workflow    string
@@ -54,14 +56,17 @@ type BranchOption func(*branchStep)
 func OnQueue(queue string) BranchOption { return func(s *branchStep) { s.queue = queue } }
 
 // WithRetry gives the step its own retry policy instead of the creating step's.
-func WithRetry(r Retry) BranchOption { return func(s *branchStep) { s.retry = &r } }
-
-// Compensable declares the step's undo, which runs in the reverse pass if the instance later fails.
-func Compensable() BranchOption { return func(s *branchStep) { s.compensable = true } }
+func WithRetry(r RetryPolicy) BranchOption { return func(s *branchStep) { s.retry = &r } }
 
 // ThenApply chains a task: its handler's return becomes the branch's context.
 func (b *CreatedBranch) ThenApply(name string, opts ...BranchOption) *CreatedBranch {
 	return b.add(name, "TASK", opts)
+}
+
+// ThenApplyCompensable is ThenApply for a step whose undo runs in the reverse pass if the instance
+// later fails; bind its compensator with Worker.HandleCompensation.
+func (b *CreatedBranch) ThenApplyCompensable(name string, opts ...BranchOption) *CreatedBranch {
+	return b.add(name, "TASK", append(opts, func(s *branchStep) { s.compensable = true }))
 }
 
 // ThenAccept chains a side effect: the branch's context is left unchanged.
@@ -126,34 +131,58 @@ func (b *CreatedBranch) ThenSubFlow(node, workflow string) *CreatedBranch {
 	return b
 }
 
-// ThenAllOf runs arms in parallel, each on its own copy of this branch's context; the combine
-// receives each arm's result under the arm's name -- its last step's, which must be a task or a gate.
-func (b *CreatedBranch) ThenAllOf(combine string, arms ...func(*CreatedBranch)) *CreatedBranch {
+// ThenAllOf runs arms in parallel, each on its own copy of this branch's context. The mandatory
+// Arms.Combine that follows receives each arm's result under the arm's name -- its last step's,
+// which must be a task or a gate.
+//
+//	b.ThenAllOf(func(a *CreatedBranch) { a.ThenApply("pay") }, func(a *CreatedBranch) { a.ThenFilter("check") }).
+//		Combine("settle")
+func (b *CreatedBranch) ThenAllOf(arms ...func(*CreatedBranch)) *Arms {
 	if len(arms) < 2 {
-		return b.fail(errors.New("ThenAllOf needs at least two arms"))
-	}
-	if combine == "" {
-		return b.fail(errors.New("ThenAllOf needs a combine step name"))
+		b.fail(errors.New("ThenAllOf needs at least two arms"))
+		return &Arms{b: b}
 	}
 	chains := make([][]branchStep, 0, len(arms))
 	seen := map[string]bool{}
 	for i, arm := range arms {
 		steps, err := chain(arm, fmt.Sprintf("arm %d", i))
 		if err != nil {
-			return b.fail(err)
+			b.fail(err)
+			return &Arms{b: b}
 		}
 		last := steps[len(steps)-1]
 		if last.kind != "TASK" && last.kind != "PREDICATE" {
-			return b.fail(fmt.Errorf("arm %d of ThenAllOf must end in a task or a gate", i))
+			b.fail(fmt.Errorf("arm %d of ThenAllOf must end in a task or a gate", i))
+			return &Arms{b: b}
 		}
 		if seen[last.name] {
-			return b.fail(fmt.Errorf("two arms of ThenAllOf end in %q; an arm is named after its last step", last.name))
+			b.fail(fmt.Errorf("two arms of ThenAllOf end in %q; an arm is named after its last step", last.name))
+			return &Arms{b: b}
 		}
 		seen[last.name] = true
 		chains = append(chains, steps)
 	}
-	b.steps = append(b.steps, branchStep{kind: "FORK", combine: combine, arms: chains})
-	return b
+	b.allOfPending = true
+	return &Arms{b: b, arms: chains}
+}
+
+// Arms is the parallel arms of a ThenAllOf, waiting for the Combine that merges them.
+type Arms struct {
+	b    *CreatedBranch
+	arms [][]branchStep
+}
+
+// Combine names the mandatory merge after ThenAllOf; the branch goes on with its return.
+func (a *Arms) Combine(name string) *CreatedBranch {
+	if a.arms == nil {
+		return a.b
+	}
+	a.b.allOfPending = false
+	if name == "" {
+		return a.b.fail(errors.New("ThenAllOf needs a combine step name"))
+	}
+	a.b.steps = append(a.b.steps, branchStep{kind: "FORK", combine: name, arms: a.arms})
+	return a.b
 }
 
 // RepeatWhile runs body, then again while the gate condition holds; past maxIterations (0 = the
@@ -201,8 +230,8 @@ func (b *CreatedBranch) ThenOneOf(arms ...Arm) *CreatedBranch {
 		if arm.chain != nil {
 			arm.chain(sub)
 		}
-		if sub.err != nil {
-			return b.fail(sub.err)
+		if err := sub.Err(); err != nil {
+			return b.fail(err)
 		}
 		cases = append(cases, branchCase{guard: arm.guard, steps: sub.steps})
 	}
@@ -211,7 +240,12 @@ func (b *CreatedBranch) ThenOneOf(arms ...Arm) *CreatedBranch {
 }
 
 // Err is the first mistake made building this branch, if any.
-func (b *CreatedBranch) Err() error { return b.err }
+func (b *CreatedBranch) Err() error {
+	if b.err == nil && b.allOfPending {
+		return errors.New("ThenAllOf needs its Combine")
+	}
+	return b.err
+}
 
 func (b *CreatedBranch) add(name, kind string, opts []BranchOption) *CreatedBranch {
 	if name == "" {
@@ -220,9 +254,6 @@ func (b *CreatedBranch) add(name, kind string, opts []BranchOption) *CreatedBran
 	s := branchStep{name: name, kind: kind}
 	for _, o := range opts {
 		o(&s)
-	}
-	if s.compensable && kind != "TASK" {
-		return b.fail(fmt.Errorf("only a task can be compensable, not gate %q", name))
 	}
 	b.steps = append(b.steps, s)
 	return b
@@ -240,8 +271,8 @@ func chain(build func(*CreatedBranch), what string) ([]branchStep, error) {
 	if build != nil {
 		build(sub)
 	}
-	if sub.err != nil {
-		return nil, sub.err
+	if err := sub.Err(); err != nil {
+		return nil, err
 	}
 	if len(sub.steps) == 0 {
 		return nil, fmt.Errorf("%s has no steps", what)

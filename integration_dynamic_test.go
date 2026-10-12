@@ -92,7 +92,7 @@ func TestIntegrationKeyedBranchesFromAHandlersStruct(t *testing.T) {
 	client, ctx := dialTest(t)
 	name := uniqueName("go-dyn-keyed")
 	wf := wiggle.Graph{Name: name, Steps: []wiggle.Node{wiggle.Step{Name: "fan", Combine: "gather"}}}.MustCompile()
-	w := wiggle.NewWorker(client, "dyn-keyed").RegisterHandlers(name, fanHandlers{})
+	w := wiggle.NewWorker(client, "dyn-keyed").RegisterHandler(name, fanHandlers{})
 	v := runFlow(t, client, ctx, wf, w, wiggle.Context{"xs": map[string]any{"a": 1.0, "b": 2.0}})
 	doubled, _ := v.Context["doubled"].(map[string]any)
 	if v.Status != "COMPLETED" || doubled["a"] != 2.0 || doubled["b"] != 4.0 {
@@ -164,8 +164,9 @@ func TestIntegrationServerSideOperatorsInABranch(t *testing.T) {
 				RepeatWhile("more", 10, func(b *wiggle.CreatedBranch) { b.ThenApply("inc") }).
 				ThenOneOf(wiggle.When("big", func(b *wiggle.CreatedBranch) { b.ThenApply("label-big") }),
 					wiggle.Otherwise(func(b *wiggle.CreatedBranch) { b.ThenApply("label-small") })).
-				ThenAllOf("both", func(b *wiggle.CreatedBranch) { b.ThenApply("left") },
+				ThenAllOf(func(b *wiggle.CreatedBranch) { b.ThenApply("left") },
 					func(b *wiggle.CreatedBranch) { b.ThenApply("right") }).
+				Combine("both").
 				ThenSubFlow("child", child).
 				ThenAwait("go", 0, nil).
 				ThenFilter("keep")
@@ -271,7 +272,7 @@ func TestIntegrationACompensableBranchStepIsUndone(t *testing.T) {
 	w := wiggle.NewWorker(client, "dyn-saga").
 		BranchSteps(name, "hold").
 		HandleStep(name, "book", func(s *wiggle.StepRun, o wiggle.Context) (wiggle.Context, error) {
-			s.Create(map[string]any{"seat": 7.0}).ThenApply("hold", wiggle.Compensable())
+			s.Create(map[string]any{"seat": 7.0}).ThenApplyCompensable("hold")
 			return o, nil
 		}).
 		Handle(name, "hold", func(b wiggle.Context) (wiggle.Context, error) { b["held"] = true; return b, nil }).
@@ -312,7 +313,7 @@ func TestIntegrationQueueCriteriaClaimOnlyTheMatchingTasks(t *testing.T) {
 	name := uniqueName("go-crit")
 	queue := name + "-q"
 	wf := wiggle.Graph{Name: name, Steps: []wiggle.Node{wiggle.Step{Name: "work", Queue: queue}},
-		Attributes: []wiggle.Attribute{{Name: "tier", Type: "STRING", Path: "customer.tier"}}}.MustCompile()
+		Attributes: []wiggle.DispatchAttribute{{Name: "tier", Type: "STRING", Path: "customer.tier"}}}.MustCompile()
 	if _, err := client.Register(ctx, wf); err != nil {
 		t.Fatal(err)
 	}

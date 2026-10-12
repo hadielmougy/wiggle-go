@@ -20,8 +20,8 @@ type FlowSpec struct {
 	Queues     []string
 }
 
-// Retry is a per-step retry policy. The zero value means "use the default".
-type Retry struct {
+// RetryPolicy is a per-step retry policy. The zero value means "use the default".
+type RetryPolicy struct {
 	MaxAttempts    int
 	InitialBackoff time.Duration
 	Multiplier     float64
@@ -30,24 +30,24 @@ type Retry struct {
 }
 
 // RetryExponential retries up to max times with exponential backoff and jitter.
-func RetryExponential(max int, initial time.Duration) Retry {
-	return Retry{MaxAttempts: max, InitialBackoff: initial, Multiplier: 2, MaxBackoff: 5 * time.Minute, Jitter: 0.2}
+func RetryExponential(max int, initial time.Duration) RetryPolicy {
+	return RetryPolicy{MaxAttempts: max, InitialBackoff: initial, Multiplier: 2, MaxBackoff: 5 * time.Minute, Jitter: 0.2}
 }
 
 // RetryFixed retries up to max times with a constant backoff.
-func RetryFixed(max int, backoff time.Duration) Retry {
-	return Retry{MaxAttempts: max, InitialBackoff: backoff, Multiplier: 1, MaxBackoff: backoff}
+func RetryFixed(max int, backoff time.Duration) RetryPolicy {
+	return RetryPolicy{MaxAttempts: max, InitialBackoff: backoff, Multiplier: 1, MaxBackoff: backoff}
 }
 
 // RetryNone disables retries (a single attempt).
-func RetryNone() Retry { return Retry{MaxAttempts: 1, Multiplier: 1} }
+func RetryNone() RetryPolicy { return RetryPolicy{MaxAttempts: 1, Multiplier: 1} }
 
 // RetryForever retries indefinitely.
-func RetryForever() Retry {
-	return Retry{MaxAttempts: 1<<31 - 1, InitialBackoff: time.Second, Multiplier: 1, MaxBackoff: time.Minute}
+func RetryForever() RetryPolicy {
+	return RetryPolicy{MaxAttempts: 1<<31 - 1, InitialBackoff: time.Second, Multiplier: 1, MaxBackoff: time.Minute}
 }
 
-func (r Retry) toJSON() map[string]any {
+func (r RetryPolicy) toJSON() map[string]any {
 	mult := r.Multiplier
 	if mult < 1 {
 		mult = 1
@@ -73,13 +73,13 @@ type Graph struct {
 	Version      int    // 0 = a content-hash version
 	DefaultQueue string // "" = the workflow name
 	Steps        []Node
-	Attributes   []Attribute // values queue criteria can test (criteria.Attr)
+	Attributes   []DispatchAttribute // values queue criteria can test (criteria.Attr)
 }
 
-// Attribute is a value the workflow declares for queue criteria to test: Path is a dotted path into
+// DispatchAttribute is a value the workflow declares for queue criteria to test: Path is a dotted path into
 // the context a step receives, read as Type -- STRING, LONG, DECIMAL or BOOLEAN. The server extracts
 // it each time a step becomes ready; a value that is missing or does not fit the type is absent.
-type Attribute struct {
+type DispatchAttribute struct {
 	Name string
 	Type string
 	Path string
@@ -90,7 +90,7 @@ const MaxAttributes = 16
 
 var attributeName = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
 
-func (a Attribute) validate() error {
+func (a DispatchAttribute) validate() error {
 	if !attributeName.MatchString(a.Name) {
 		return fmt.Errorf("attribute name %q must match %s", a.Name, attributeName)
 	}
@@ -121,10 +121,10 @@ type Node interface{ isNode() }
 // reverse pass, handing it the input/result context snapshots captured at this step's completion.
 type Step struct {
 	Name       string
-	Queue      string // "" = the default queue
-	Retry      Retry  // zero = default
-	Compensate bool   // declare an undo; a compensator MUST be bound for this step
-	Combine    string // a spawning step: the combine its created branches rejoin at
+	Queue      string      // "" = the default queue
+	Retry      RetryPolicy // zero = default
+	Compensate bool        // declare an undo; a compensator MUST be bound for this step
+	Combine    string      // a spawning step: the combine its created branches rejoin at
 }
 
 // Effect is a step run for its side effect only; the context is unchanged. (Topologically identical
@@ -134,7 +134,7 @@ type Step struct {
 type Effect struct {
 	Name       string
 	Queue      string
-	Retry      Retry
+	Retry      RetryPolicy
 	Compensate bool
 	Combine    string
 }
@@ -144,7 +144,7 @@ type Effect struct {
 type Gate struct {
 	Name  string
 	Queue string
-	Retry Retry
+	Retry RetryPolicy
 }
 
 // Sleep waits on a server-side timer; no worker is held. Name is optional.
@@ -178,14 +178,14 @@ type Branch struct {
 // MANDATORY merge step that runs after the join: its handler receives the context with each
 // branch's result staged under the branch's name, and must return the COMPLETE post-join context
 // (the engine replaces the context with it -- there is no implicit fold of the arms, and keys the
-// handler omits do not survive the join). Bind it with Worker.HandleCombine or a RegisterHandlers
+// handler omits do not survive the join). Bind it with Worker.HandleCombine or a RegisterHandler
 // method matched by name.
 type Fork struct {
 	Branches []Branch
 	Combine  string
 }
 
-// ForEach fans out one ISOLATED branch per element of the collection at Over (a list or a map).
+// ForEach fans out one ISOLATED branch per element of the collection at ItemsKey (a list or a map).
 // The element IS each item's context: body steps are bound with HandleItem (or an
 // ItemActivity-shaped method) — they receive the item's current value and their return replaces
 // it; the frozen base and the element's index/source key ride on the activation. Combine names the
@@ -194,10 +194,10 @@ type Fork struct {
 // input for a map input — and must return the COMPLETE post-join context. An empty collection
 // skips the body and the combine.
 type ForEach struct {
-	Name    string // label; the collected results are staged under this key for the combine
-	Over    string // itemsKey
-	Body    []Node
-	Combine string
+	Name     string // label; the collected results are staged under this key for the combine
+	ItemsKey string // itemsKey
+	Body     []Node
+	Combine  string
 }
 
 // Case is one arm of a Choose. When == "" marks the default (otherwise) arm, which must be last.
@@ -268,7 +268,7 @@ func (g *graph) reserve(name string) {
 	g.reserved[name] = true
 }
 
-func (g *graph) addWorker(kind, name, queue string, retry Retry) string {
+func (g *graph) addWorker(kind, name, queue string, retry RetryPolicy) string {
 	g.reserve(name)
 	id := g.nid("n")
 	q := queue
@@ -324,7 +324,7 @@ func (g *graph) addDynFork(name, itemsKey, itemKey string) string {
 // step, carrying the fork's armNames so the engine can stage each isolated branch's result under
 // its name for the handler, and strip those keys afterward.
 func (g *graph) addCombine(name string, arms []string) string {
-	id := g.addWorker("TASK", name, "", Retry{})
+	id := g.addWorker("TASK", name, "", RetryPolicy{})
 	g.nodes[id]["armNames"] = toAnySlice(arms)
 	return id
 }
@@ -332,7 +332,7 @@ func (g *graph) addCombine(name string, arms []string) string {
 // addForEachCombine emits the mandatory merge node after a forEach's join: a TASK bound by name,
 // whose collectKey is the scratch key the engine stages the collected item results under.
 func (g *graph) addForEachCombine(name, forEachName string) string {
-	id := g.addWorker("TASK", name, "", Retry{})
+	id := g.addWorker("TASK", name, "", RetryPolicy{})
 	g.nodes[id]["collectKey"] = forEachScratchPrefix + forEachName
 	return id
 }
@@ -340,7 +340,7 @@ func (g *graph) addForEachCombine(name, forEachName string) string {
 // addSpawnCombine emits the combine after a spawning step: a TASK bound by name whose collectKey
 // stages the results of the branches stepName created.
 func (g *graph) addSpawnCombine(name, stepName string) string {
-	id := g.addWorker("TASK", name, "", Retry{})
+	id := g.addWorker("TASK", name, "", RetryPolicy{})
 	g.nodes[id]["collectKey"] = spawnScratchPrefix + stepName
 	return id
 }
@@ -395,7 +395,7 @@ type openEnd struct{ nodeID, edge string }
 
 // appendTask chains a task; with a combine it is a spawning step, followed by a dynamic join and
 // the combine collecting the branches it creates.
-func (b *builder) appendTask(name, queue string, retry Retry, compensate bool, combine string) {
+func (b *builder) appendTask(name, queue string, retry RetryPolicy, compensate bool, combine string) {
 	id := b.g.addWorker("TASK", name, queue, retry)
 	if compensate {
 		b.g.nodes[id]["compensable"] = true
@@ -528,9 +528,9 @@ func (b *builder) appendNode(n Node) {
 		}
 		name := node.Name
 		if name == "" {
-			name = node.Over
+			name = node.ItemsKey
 		}
-		forkID := b.g.addDynFork(name, node.Over, node.Over)
+		forkID := b.g.addDynFork(name, node.ItemsKey, node.ItemsKey)
 		b.attach(forkID)
 		joinID := b.g.addJoin(0)
 		template := b.buildBranch(Branch{Name: name, Steps: node.Body}, joinID)
@@ -550,7 +550,7 @@ func (b *builder) appendNode(n Node) {
 		if node.MaxIterations < 0 {
 			fail("do_while %q: MaxIterations must be positive (0 = engine default)", node.While)
 		}
-		condID := b.g.addWorker("PREDICATE", node.While, "", Retry{})
+		condID := b.g.addWorker("PREDICATE", node.While, "", RetryPolicy{})
 		budget := node.MaxIterations
 		if budget == 0 {
 			budget = -1 // engine default — mirrors the Java client's two-arg doWhile
@@ -584,7 +584,7 @@ func (b *builder) appendChoose(c Choose) {
 	}
 	guardIDs := make([]string, nGuards)
 	for i := 0; i < nGuards; i++ {
-		guardIDs[i] = b.g.addWorker("PREDICATE", c.Cases[i].When, "", Retry{})
+		guardIDs[i] = b.g.addWorker("PREDICATE", c.Cases[i].When, "", RetryPolicy{})
 	}
 	b.attach(guardIDs[0])
 	b.open = nil
