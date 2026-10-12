@@ -92,10 +92,10 @@ func TestForkJoin(t *testing.T) {
 	if join["expected"] != 2 {
 		t.Fatalf("join expected = %v (want 2)", join["expected"])
 	}
-	// The join flows into the mandatory combine (a TASK carrying the arm names on itemsKey),
+	// The join flows into the mandatory combine (a TASK carrying the arm names),
 	// and only then into the next step -- there is no implicit fold.
 	combine := nodeByName(def, "merge")
-	if combine["kind"] != "TASK" || combine["itemsKey"] != `["payment","shipping"]` {
+	if combine["kind"] != "TASK" || !reflect.DeepEqual(combine["armNames"], []any{"payment", "shipping"}) {
 		t.Fatalf("combine node wrong: %v", combine)
 	}
 	if join["next"] != combine["id"] {
@@ -194,7 +194,7 @@ func TestExplicitVersion(t *testing.T) {
 func TestTaskReturnIsSentWhole(t *testing.T) {
 	// The return REPLACES the context server-side, so the handler's whole return goes on the wire.
 	h := taskHandler(func(ctx Context) (Context, error) { return Context{"a": 1.0}, nil })
-	got, err := h(Context{"a": 1.0, "b": 2.0})
+	got, err := h(nil, Context{"a": 1.0, "b": 2.0})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +203,7 @@ func TestTaskReturnIsSentWhole(t *testing.T) {
 	}
 	// nil return = context untouched
 	h = taskHandler(func(ctx Context) (Context, error) { return nil, nil })
-	if got, _ := h(Context{"a": 1.0}); got != nil {
+	if got, _ := h(nil, Context{"a": 1.0}); got != nil {
 		t.Fatalf("nil return must report nil, got %v", got)
 	}
 }
@@ -219,7 +219,7 @@ func TestForEachEmitsCombine(t *testing.T) {
 	}.MustCompile()
 	def := bp.Definition
 	combine := nodeByName(def, "collect")
-	if combine["kind"] != "TASK" || combine["itemsKey"] != `"per-item"` {
+	if combine["kind"] != "TASK" || combine["collectKey"] != "__forEach__per-item" {
 		t.Fatalf("forEach combine wrong: %v", combine)
 	}
 	var join map[string]any

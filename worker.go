@@ -13,8 +13,8 @@ import (
 )
 
 // activityHandler is the internal, pre-wrapped step handler: it returns the value to report
-// (a shallow-diff map for a task, a bool for a predicate, nil for an effect).
-type activityHandler func(Context) (any, error)
+// (the complete next context for a task, a bool for a predicate, nil for an effect).
+type activityHandler func(*StepRun, Context) (any, error)
 
 type claim struct{ workflow, step, kind string }
 
@@ -51,11 +51,11 @@ type Worker struct {
 	client *Client
 	id     string
 
-	handlers    map[string]activityHandler
+	handlers     map[string]activityHandler
 	itemHandlers map[string]ItemActivity
-	queues      map[string]bool
-	claims      []claim
-	handlerSets []handlerSet
+	queues       map[string]bool
+	claims       []claim
+	handlerSets  []handlerSet
 
 	concurrency       int
 	leaseMillis       int64
@@ -96,16 +96,22 @@ func (w *Worker) Handle(workflow, step string, fn Activity) *Worker {
 	return w.bind(workflow, step, "TASK", taskHandler(fn))
 }
 
+// HandleStep binds a task handler that also receives the running StepRun, to read its attempt or
+// emit events. See Handle.
+func (w *Worker) HandleStep(workflow, step string, fn StepActivity) *Worker {
+	return w.bind(workflow, step, "TASK", stepHandler(fn))
+}
+
 // HandleGate binds a predicate step (gate / choose guard / do-while condition) by name.
 func (w *Worker) HandleGate(workflow, step string, test Predicate) *Worker {
-	return w.bind(workflow, step, "PREDICATE", func(ctx Context) (any, error) {
+	return w.bind(workflow, step, "PREDICATE", func(_ *StepRun, ctx Context) (any, error) {
 		return test(ctx)
 	})
 }
 
 // HandleEffect binds a side-effect step by name; the context is left unchanged.
 func (w *Worker) HandleEffect(workflow, step string, fn SideEffect) *Worker {
-	return w.bind(workflow, step, "TASK", func(ctx Context) (any, error) {
+	return w.bind(workflow, step, "TASK", func(_ *StepRun, ctx Context) (any, error) {
 		return nil, fn(ctx)
 	})
 }
@@ -115,7 +121,7 @@ func (w *Worker) HandleEffect(workflow, step string, fn SideEffect) *Worker {
 // context: it is sent verbatim (no diff, no implicit fold) and the engine REPLACES the context with
 // it -- keys fn omits do not survive the join.
 func (w *Worker) HandleCombine(workflow, step string, fn Activity) *Worker {
-	return w.bind(workflow, step, "COMBINE", combineHandler(fn))
+	return w.bind(workflow, step, "COMBINE", combineHandler(withoutStep(fn)))
 }
 
 // HandleCompensation binds the undo of a compensable step (one declared Compensate in the
@@ -224,20 +230,19 @@ func (w *Worker) reconcile(ctx context.Context) error {
 					c.step, wf, availableSteps(nodes))
 			}
 			k, _ := node["kind"].(string)
-			itemsKey, _ := node["itemsKey"].(string)
-			isCombine := k == "TASK" && itemsKey != ""
+			combine := isCombine(node)
 			compensable, _ := node["compensable"].(bool)
 			switch {
-			case c.kind == "COMPENSATE" && (k != "TASK" || isCombine || !compensable):
+			case c.kind == "COMPENSATE" && (k != "TASK" || combine || !compensable):
 				return fmt.Errorf("step %q of workflow %q is not declared Compensate in the "+
 					"topology; HandleCompensation binds only compensable steps", c.step, wf)
 			case c.kind == "COMPENSATE":
 				// ok: a compensator on a compensable step
-			case c.kind == "COMBINE" && !isCombine:
+			case c.kind == "COMBINE" && !combine:
 				return fmt.Errorf("activity %q is not a fork combine; bind it with Handle()", activity)
 			case c.kind == "COMBINE":
 				// ok: a combine claim on a combine node
-			case isCombine:
+			case combine:
 				return fmt.Errorf("activity %q is a fork combine; bind it with HandleCombine() -- "+
 					"its return is the complete post-join context (no implicit fold)", activity)
 			case k != c.kind:
@@ -381,22 +386,32 @@ func (w *Worker) execute(task *Task) {
 	stop := w.startHeartbeat(task)
 	defer close(stop)
 
-	result, err := handler(task.Context)
+	input, err := unstage(task)
 	if err != nil {
-		var perm *PermanentError
-		if errors.As(err, &perm) {
-			_ = w.client.Fail(ctx, task.TaskID, task.LeaseOwner, perm.Error(), false)
-		} else {
-			_ = w.client.Fail(ctx, task.TaskID, task.LeaseOwner, err.Error(), true)
-		}
+		_ = w.client.Fail(ctx, task.TaskID, task.LeaseOwner, err.Error(), false)
 		return
 	}
+	step := newStep(task)
+	started := time.Now()
+	result, err := handler(step, input)
+	if err != nil {
+		w.fail(ctx, task, err)
+		return
+	}
+	report := StepReport{NodeID: task.NodeID, StartedAt: started.UnixMilli(),
+		FinishedAt: started.UnixMilli() + time.Since(started).Milliseconds(), Events: step.drain()}
 	if task.Kind == "PREDICATE" {
-		b, _ := result.(bool)
-		_ = w.client.Complete(ctx, task.TaskID, task.LeaseOwner, Context{"value": b})
-		return
+		b, isBool := result.(bool)
+		if !isBool {
+			_ = w.client.Fail(ctx, task.TaskID, task.LeaseOwner,
+				fmt.Sprintf("predicate %q returned %T", task.StepName, result), false)
+			return
+		}
+		report.Predicate = &b
+	} else {
+		report.Merge = result
 	}
-	_ = w.client.Complete(ctx, task.TaskID, task.LeaseOwner, result)
+	w.report(ctx, task, report)
 }
 
 // executeItem runs a forEach body step: the handler gets (base, item) and its return replaces the
@@ -414,17 +429,30 @@ func (w *Worker) executeItem(ctx context.Context, task *Task) {
 	}
 	stop := w.startHeartbeat(task)
 	defer close(stop)
+	started := time.Now()
 	result, err := fn(task.BaseContext, task.RawContext)
 	if err != nil {
-		var perm *PermanentError
-		if errors.As(err, &perm) {
-			_ = w.client.Fail(ctx, task.TaskID, task.LeaseOwner, perm.Error(), false)
-		} else {
-			_ = w.client.Fail(ctx, task.TaskID, task.LeaseOwner, err.Error(), true)
-		}
+		w.fail(ctx, task, err)
 		return
 	}
-	_ = w.client.Complete(ctx, task.TaskID, task.LeaseOwner, result)
+	w.report(ctx, task, StepReport{NodeID: task.NodeID, Merge: result, StartedAt: started.UnixMilli(),
+		FinishedAt: started.UnixMilli() + time.Since(started).Milliseconds()})
+}
+
+// report settles a finished step. A refusal means the lease was lost; the task re-runs elsewhere.
+func (w *Worker) report(ctx context.Context, task *Task, step StepReport) {
+	if _, err := w.client.ReportSteps(ctx, task.TaskID, task.LeaseOwner, []StepReport{step}, true); err != nil {
+		log.Printf("wiggle: report of step %s of %s failed: %v", task.StepName, task.InstanceID, err)
+	}
+}
+
+func (w *Worker) fail(ctx context.Context, task *Task, err error) {
+	var perm *PermanentError
+	if errors.As(err, &perm) {
+		_ = w.client.Fail(ctx, task.TaskID, task.LeaseOwner, perm.Error(), false)
+	} else {
+		_ = w.client.Fail(ctx, task.TaskID, task.LeaseOwner, err.Error(), true)
+	}
 }
 
 // startHeartbeat extends the lease periodically while a slow step runs; close the channel to stop.

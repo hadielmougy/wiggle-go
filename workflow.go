@@ -281,23 +281,32 @@ func (g *graph) addDynFork(name, itemsKey, itemKey string) string {
 }
 
 // addCombine emits the mandatory merge node after a fork's join: a TASK bound by name like any
-// step, carrying the fork's arm names (a JSON array) on its itemsKey so the engine can stage each
-// isolated branch's result under its name for the handler, and strip those keys afterward.
+// step, carrying the fork's armNames so the engine can stage each isolated branch's result under
+// its name for the handler, and strip those keys afterward.
 func (g *graph) addCombine(name string, arms []string) string {
 	id := g.addWorker("TASK", name, "", Retry{})
-	names, _ := json.Marshal(arms)
-	g.nodes[id]["itemsKey"] = string(names)
+	g.nodes[id]["armNames"] = toAnySlice(arms)
 	return id
 }
 
 // addForEachCombine emits the mandatory merge node after a forEach's join: a TASK bound by name,
-// whose itemsKey is a JSON STRING (the scratch key the engine stages the collected item results
-// under) — versus a fork combine's arm-name array.
-func (g *graph) addForEachCombine(name, scratchKey string) string {
+// whose collectKey is the scratch key the engine stages the collected item results under.
+func (g *graph) addForEachCombine(name, forEachName string) string {
 	id := g.addWorker("TASK", name, "", Retry{})
-	key, _ := json.Marshal(scratchKey)
-	g.nodes[id]["itemsKey"] = string(key)
+	g.nodes[id]["collectKey"] = forEachScratchPrefix + forEachName
 	return id
+}
+
+// isCombine reports whether a registered graph node is a fork or forEach combine: a TASK with
+// armNames or a collectKey, or -- in a graph written before those fields -- an itemsKey.
+func isCombine(node map[string]any) bool {
+	if k, _ := node["kind"].(string); k != "TASK" {
+		return false
+	}
+	arms, _ := node["armNames"].([]any)
+	collect, _ := node["collectKey"].(string)
+	legacy, _ := node["itemsKey"].(string)
+	return len(arms) > 0 || collect != "" || legacy != ""
 }
 
 func (g *graph) addJoin(expected int) string {
@@ -329,7 +338,7 @@ func (g *graph) wire(nodeID, edge, target string) {
 }
 
 func (g *graph) setBranches(forkID string, starts []string) {
-	g.nodes[forkID]["branches"] = starts
+	g.nodes[forkID]["branches"] = toAnySlice(starts)
 }
 
 // ---- compiler (open-ends wiring over the declarative structs) ----

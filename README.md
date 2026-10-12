@@ -3,7 +3,7 @@
 A Go client and worker for [Wiggle](https://github.com/hadielmougy/wiggle), the durable state-machine
 platform. It speaks the same gRPC control plane as the Java and Python clients, so a Go worker
 **interoperates** with them on one server — dispatch is by activity name (`"<workflow>#<step>"`), not
-by language. In a coordinator-sharded deployment the Go client resolves the owning cell per instance.
+by language.
 
 ```bash
 go get github.com/hadielmougy/wiggle-go
@@ -119,7 +119,9 @@ wf := wiggle.Graph{
 A fork's combine is bound with `HandleCombine(workflow, step, fn)`: `fn` receives the context with
 each branch's result staged under the branch's name, and must return the **complete** post-join
 context — the engine replaces the context with it, so keys the handler omits do not survive the
-join (there is no implicit union of the arms).
+join (there is no implicit union of the arms). The engine stages the arm results under reserved
+keys; the worker hands them to `fn` under the branch names, and fails the step if a branch name is
+also a key of the context itself (rename one of them).
 
 ```go
 worker.HandleCombine("order", "merge", func(ctx wiggle.Context) (wiggle.Context, error) {
@@ -203,7 +205,8 @@ worker := wiggle.NewWorker(client, "orders").RegisterHandlers("order", OrderHand
 worker.Start(ctx)
 ```
 
-Each exported method shaped like a handler — `func(Context)(Context,error)` (task),
+Each exported method shaped like a handler — `func(Context)(Context,error)` or
+`func(*StepRun, Context)(Context,error)` (task),
 `func(Context)(bool,error)` (gate), or `func(Context)error` (effect) — is matched to a step of the
 named workflow **by case-insensitive name** (`InStock` ↔ `in-stock`) on `Start`. The graph confirms
 the exact name and the kind, so a signature that contradicts it (a task method for a gate step) fails
@@ -225,8 +228,34 @@ AwaitCompletion(ctx, id, timeout) (*InstanceView, error)
 ListInstances(ctx, workflow, status, limit)
 Cancel(ctx, id, reason) / Signal(ctx, id, name, payload)
 Health(ctx)
-// worker RPCs: Poll / Complete / Fail / Heartbeat
+Register(ctx, flowSpec, wiggle.Force())                  // replace a differing graph at the same version (server must allow it)
+GetWorkflowVersion(ctx, name, version)
+PollEvents(ctx, consumer, max, wait, startFrom) (*EventBatch, error)   // the durable event log
+AckEvents(ctx, consumer, cursor)
+SearchInstances(ctx, SearchQuery{...}) (*SearchResult, error)          // needs search shards
+StepStats(ctx, workflow, version) (*StepStats, error)                  // per-step duration and queue-wait percentiles
+BacklogCoverage(ctx, max) ([]BacklogSlice, livePollers, error)
+// worker RPCs: Poll / ReportSteps / Fail / Heartbeat
 ```
+
+## Step metadata and events
+
+A handler bound with `HandleStep` (or a `RegisterHandlers` method shaped
+`func(*wiggle.StepRun, wiggle.Context) (wiggle.Context, error)`) also receives the running step:
+
+```go
+worker.HandleStep("order", "ship", func(s *wiggle.StepRun, o wiggle.Context) (wiggle.Context, error) {
+	if err := s.Emit("order.shipped", map[string]any{"orderId": o["orderId"], "attempt": s.Attempt()}); err != nil {
+		return nil, err
+	}
+	return o, nil
+})
+```
+
+An emitted event rides the step's report and is committed in the same transaction as the step: an
+attempt that fails leaves none behind, and its retry emits again. Consumers read emitted and
+lifecycle (`wf.*`) events through `PollEvents` / `AckEvents`. The worker reports each step's start
+and finish times, which feed `StepStats`.
 
 ## Testing
 
@@ -240,4 +269,6 @@ WIGGLE_TEST_URL=localhost:8080 go test -run Integration ./...   # end-to-end aga
 - **Numbers** arrive as `float64` (Go's `encoding/json` convention), so assert `o["qty"].(float64)`.
 - **Execution mode is SERVER only** (no local step chaining); interop with Java/Python workers is by
   activity name, so the Go content-hash version need not equal theirs.
+- **Not yet supported** (Java client only for now): branches created at run time (`Step.create`) and
+  queue criteria (polling with a predicate).
 - **Regenerating stubs:** `./codegen.sh` (needs `protoc` + `protoc-gen-go` + `protoc-gen-go-grpc`).
