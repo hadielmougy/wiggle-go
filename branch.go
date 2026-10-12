@@ -49,33 +49,59 @@ type branchCase struct {
 	steps []branchStep
 }
 
-// BranchOption tunes one step of a branch.
-type BranchOption func(*branchStep)
+// StepOption tunes one step of a Flow or a CreatedBranch.
+type StepOption func(*stepOptions)
 
-// OnQueue runs the step on queue instead of the creating step's.
-func OnQueue(queue string) BranchOption { return func(s *branchStep) { s.queue = queue } }
+type stepOptions struct {
+	queue string
+	retry *RetryPolicy
+}
 
-// WithRetry gives the step its own retry policy instead of the creating step's.
-func WithRetry(r RetryPolicy) BranchOption { return func(s *branchStep) { s.retry = &r } }
+func options(opts []StepOption) stepOptions {
+	var o stepOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return o
+}
+
+func (o stepOptions) retryOr() RetryPolicy {
+	if o.retry == nil {
+		return RetryPolicy{}
+	}
+	return *o.retry
+}
+
+// OnQueue runs the step on queue: instead of the flow's default queue, or of the creating step's in
+// a created branch.
+func OnQueue(queue string) StepOption { return func(o *stepOptions) { o.queue = queue } }
+
+// WithRetry gives the step its own retry policy: instead of the default, or of the creating step's in
+// a created branch.
+func WithRetry(r RetryPolicy) StepOption { return func(o *stepOptions) { o.retry = &r } }
 
 // ThenApply chains a task: its handler's return becomes the branch's context.
-func (b *CreatedBranch) ThenApply(name string, opts ...BranchOption) *CreatedBranch {
+func (b *CreatedBranch) ThenApply(name string, opts ...StepOption) *CreatedBranch {
 	return b.add(name, "TASK", opts)
 }
 
 // ThenApplyCompensable is ThenApply for a step whose undo runs in the reverse pass if the instance
 // later fails; bind its compensator with Worker.HandleCompensation.
-func (b *CreatedBranch) ThenApplyCompensable(name string, opts ...BranchOption) *CreatedBranch {
-	return b.add(name, "TASK", append(opts, func(s *branchStep) { s.compensable = true }))
+func (b *CreatedBranch) ThenApplyCompensable(name string, opts ...StepOption) *CreatedBranch {
+	b.add(name, "TASK", opts)
+	if b.err == nil {
+		b.steps[len(b.steps)-1].compensable = true
+	}
+	return b
 }
 
 // ThenAccept chains a side effect: the branch's context is left unchanged.
-func (b *CreatedBranch) ThenAccept(name string, opts ...BranchOption) *CreatedBranch {
+func (b *CreatedBranch) ThenAccept(name string, opts ...StepOption) *CreatedBranch {
 	return b.add(name, "TASK", opts)
 }
 
 // ThenFilter chains a gate: false ends this branch at the join, as a false gate ends a fork arm.
-func (b *CreatedBranch) ThenFilter(name string, opts ...BranchOption) *CreatedBranch {
+func (b *CreatedBranch) ThenFilter(name string, opts ...StepOption) *CreatedBranch {
 	return b.add(name, "PREDICATE", opts)
 }
 
@@ -203,21 +229,24 @@ func (b *CreatedBranch) RepeatWhile(condition string, maxIterations int, body fu
 	return b
 }
 
+// Chain is what an arm of ThenOneOf chains its steps on: a *Flow, or a *CreatedBranch.
+type Chain interface{ *Flow | *CreatedBranch }
+
 // Arm is one arm of ThenOneOf: When(guard, ...) or, last, Otherwise(...).
-type Arm struct {
+type Arm[C Chain] struct {
 	guard string
-	chain func(*CreatedBranch)
+	chain func(C)
 }
 
 // When opens an arm of ThenOneOf, run when the gate guard holds.
-func When(guard string, chain func(*CreatedBranch)) Arm { return Arm{guard: guard, chain: chain} }
+func When[C Chain](guard string, chain func(C)) Arm[C] { return Arm[C]{guard: guard, chain: chain} }
 
 // Otherwise is the last arm of ThenOneOf, run when no guard held.
-func Otherwise(chain func(*CreatedBranch)) Arm { return Arm{chain: chain} }
+func Otherwise[C Chain](chain func(C)) Arm[C] { return Arm[C]{chain: chain} }
 
 // ThenOneOf runs the first arm whose guard holds, or the Otherwise arm. Without one, a choice where
 // no guard held goes on past it.
-func (b *CreatedBranch) ThenOneOf(arms ...Arm) *CreatedBranch {
+func (b *CreatedBranch) ThenOneOf(arms ...Arm[*CreatedBranch]) *CreatedBranch {
 	if len(arms) == 0 || arms[0].guard == "" {
 		return b.fail(errors.New("ThenOneOf needs an arm opened with When"))
 	}
@@ -247,14 +276,12 @@ func (b *CreatedBranch) Err() error {
 	return b.err
 }
 
-func (b *CreatedBranch) add(name, kind string, opts []BranchOption) *CreatedBranch {
+func (b *CreatedBranch) add(name, kind string, opts []StepOption) *CreatedBranch {
 	if name == "" {
 		return b.fail(errors.New("a branch step needs a name"))
 	}
-	s := branchStep{name: name, kind: kind}
-	for _, o := range opts {
-		o(&s)
-	}
+	o := options(opts)
+	s := branchStep{name: name, kind: kind, queue: o.queue, retry: o.retry}
 	b.steps = append(b.steps, s)
 	return b
 }

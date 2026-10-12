@@ -27,17 +27,13 @@ func main() {
 	defer client.Close()
 	ctx := context.Background()
 
-	// Topology is declarative data -- a Graph that mirrors the YAML/graph schema. Handlers are bound
-	// separately, by name, on the worker (below).
-	wf := wiggle.Graph{
-		Name: "go-order",
-		Steps: []wiggle.Node{
-			wiggle.Step{Name: "validate"},
-			wiggle.Gate{Name: "in-stock"},
-			wiggle.Step{Name: "charge", Queue: "payments", Retry: wiggle.RetryExponential(5, 100*time.Millisecond)},
-			wiggle.Effect{Name: "notify"},
-		},
-	}.MustCompile()
+	// The topology names its steps; handlers are bound separately, by name, on the worker (below).
+	wf := wiggle.MustDefine("go-order", 0, func(f *wiggle.Flow) {
+		f.ThenApply("validate").
+			ThenFilter("in-stock").
+			ThenApply("charge", wiggle.OnQueue("payments"), wiggle.WithRetry(wiggle.RetryExponential(5, 100*time.Millisecond))).
+			ThenAccept("notify")
+	})
 
 	version, err := client.Register(ctx, wf)
 	if err != nil {

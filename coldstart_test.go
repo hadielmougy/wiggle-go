@@ -72,7 +72,7 @@ func TestColdStartRegisterWaitsForServer(t *testing.T) {
 	}
 	defer client.Close()
 
-	bp := wiggle.Graph{Name: "cold", Steps: []wiggle.Node{wiggle.Step{Name: "a"}}}.MustCompile()
+	bp := wiggle.MustDefine("cold", 0, func(f *wiggle.Flow) { f.ThenApply("a") })
 
 	done := make(chan error, 1)
 	go func() {

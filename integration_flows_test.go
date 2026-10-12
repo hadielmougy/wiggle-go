@@ -36,25 +36,22 @@ func runFlow(t *testing.T, client *wiggle.Client, ctx context.Context, wf *wiggl
 func TestIntegrationForkCombine(t *testing.T) {
 	client, ctx := dialTest(t)
 	name := uniqueName("go-it-fork")
-	wf := wiggle.Graph{Name: name, Steps: []wiggle.Node{
-		wiggle.Fork{Branches: []wiggle.Branch{
-			{Name: "left", Steps: []wiggle.Node{wiggle.Step{Name: "l"}}},
-			{Name: "right", Steps: []wiggle.Node{wiggle.Step{Name: "r"}}},
-		}, Combine: "join"},
-	}}.MustCompile()
+	wf := wiggle.MustDefine(name, 0, func(f *wiggle.Flow) {
+		f.ThenAllOf(func(a *wiggle.Flow) { a.ThenApply("l") }, func(a *wiggle.Flow) { a.ThenApply("r") }).Combine("join")
+	})
 	w := wiggle.NewWorker(client, "it-fork").
 		Handle(name, "l", func(o wiggle.Context) (wiggle.Context, error) { o["side"] = "L"; return o, nil }).
 		Handle(name, "r", func(o wiggle.Context) (wiggle.Context, error) { o["side"] = "R"; return o, nil }).
 		HandleCombine(name, "join", func(o wiggle.Context) (wiggle.Context, error) {
-			left, _ := o["left"].(map[string]any)
-			right, _ := o["right"].(map[string]any)
+			left, _ := o["l"].(map[string]any) // an arm's result is staged under its last step's name
+			right, _ := o["r"].(map[string]any)
 			return wiggle.Context{"n": o["n"], "sides": fmt.Sprint(left["side"], right["side"])}, nil
 		})
 	v := runFlow(t, client, ctx, wf, w, wiggle.Context{"n": 1.0})
 	if v.Status != "COMPLETED" || v.Context["sides"] != "LR" || v.Context["n"] != 1.0 {
 		t.Fatalf("status=%s context=%v error=%q", v.Status, v.Context, v.Error)
 	}
-	if _, staged := v.Context["left"]; staged {
+	if _, staged := v.Context["l"]; staged {
 		t.Fatalf("an arm key the combine dropped survived the join: %v", v.Context)
 	}
 }
@@ -62,9 +59,9 @@ func TestIntegrationForkCombine(t *testing.T) {
 func TestIntegrationForEach(t *testing.T) {
 	client, ctx := dialTest(t)
 	name := uniqueName("go-it-each")
-	wf := wiggle.Graph{Name: name, Steps: []wiggle.Node{
-		wiggle.ForEach{Name: "doubled", ItemsKey: "xs", Body: []wiggle.Node{wiggle.Step{Name: "double"}}, Combine: "sum"},
-	}}.MustCompile()
+	wf := wiggle.MustDefine(name, 0, func(f *wiggle.Flow) {
+		f.ThenForEach("doubled", "xs", func(b *wiggle.Flow) { b.ThenApply("double") }).Combine("sum")
+	})
 	w := wiggle.NewWorker(client, "it-each").
 		HandleItem(name, "double", func(base wiggle.Context, item any) (any, error) {
 			return item.(float64) * base["factor"].(float64), nil
@@ -85,13 +82,13 @@ func TestIntegrationForEach(t *testing.T) {
 func TestIntegrationChooseAndDoWhile(t *testing.T) {
 	client, ctx := dialTest(t)
 	name := uniqueName("go-it-loop")
-	wf := wiggle.Graph{Name: name, Steps: []wiggle.Node{
-		wiggle.DoWhile{While: "more", MaxIterations: 10, Body: []wiggle.Node{wiggle.Step{Name: "inc"}}},
-		wiggle.Choose{Cases: []wiggle.Case{
-			{When: "big", Then: []wiggle.Node{wiggle.Step{Name: "label-big"}}},
-			{Then: []wiggle.Node{wiggle.Step{Name: "label-small"}}},
-		}},
-	}}.MustCompile()
+	wf := wiggle.MustDefine(name, 0, func(f *wiggle.Flow) {
+		f.RepeatWhile("more", 10, func(b *wiggle.Flow) { b.ThenApply("inc") }).
+			ThenOneOf(
+				wiggle.When("big", func(a *wiggle.Flow) { a.ThenApply("label-big") }),
+				wiggle.Otherwise(func(a *wiggle.Flow) { a.ThenApply("label-small") }),
+			)
+	})
 	label := func(l string) wiggle.Activity {
 		return func(o wiggle.Context) (wiggle.Context, error) { o["label"] = l; return o, nil }
 	}
@@ -110,11 +107,9 @@ func TestIntegrationChooseAndDoWhile(t *testing.T) {
 func TestIntegrationSignalAndSleep(t *testing.T) {
 	client, ctx := dialTest(t)
 	name := uniqueName("go-it-signal")
-	wf := wiggle.Graph{Name: name, Steps: []wiggle.Node{
-		wiggle.Sleep{For: 100 * time.Millisecond},
-		wiggle.AwaitSignal{Name: "approve", Timeout: 30 * time.Second},
-		wiggle.Step{Name: "finish"},
-	}}.MustCompile()
+	wf := wiggle.MustDefine(name, 0, func(f *wiggle.Flow) {
+		f.ThenSleep(100*time.Millisecond).ThenAwait("approve", 30*time.Second, nil).ThenApply("finish")
+	})
 	w := wiggle.NewWorker(client, "it-signal").
 		Handle(name, "finish", func(o wiggle.Context) (wiggle.Context, error) { o["done"] = true; return o, nil })
 	if _, err := client.Register(ctx, wf); err != nil {
@@ -151,14 +146,11 @@ func TestIntegrationSubWorkflow(t *testing.T) {
 	client, ctx := dialTest(t)
 	child := uniqueName("go-it-child")
 	parent := uniqueName("go-it-parent")
-	childWf := wiggle.Graph{Name: child, Steps: []wiggle.Node{wiggle.Step{Name: "work"}}}.MustCompile()
+	childWf := wiggle.MustDefine(child, 0, func(f *wiggle.Flow) { f.ThenApply("work") })
 	if _, err := client.Register(ctx, childWf); err != nil {
 		t.Fatalf("register child: %v", err)
 	}
-	wf := wiggle.Graph{Name: parent, Steps: []wiggle.Node{
-		wiggle.SubWorkflow{Workflow: child},
-		wiggle.Step{Name: "after"},
-	}}.MustCompile()
+	wf := wiggle.MustDefine(parent, 0, func(f *wiggle.Flow) { f.ThenSubFlow(child, child).ThenApply("after") })
 	w := wiggle.NewWorker(client, "it-sub").
 		Handle(child, "work", func(o wiggle.Context) (wiggle.Context, error) { o["child"] = true; return o, nil }).
 		Handle(parent, "after", func(o wiggle.Context) (wiggle.Context, error) { o["after"] = true; return o, nil })
@@ -177,7 +169,7 @@ func TestIntegrationEventsAndStats(t *testing.T) {
 	if _, err := client.PollEvents(ctx, consumer, 1, 0, -1); err != nil { // register the cursor
 		t.Fatalf("register consumer: %v", err)
 	}
-	wf := wiggle.Graph{Name: name, Steps: []wiggle.Node{wiggle.Step{Name: "ship"}}}.MustCompile()
+	wf := wiggle.MustDefine(name, 0, func(f *wiggle.Flow) { f.ThenApply("ship") })
 	w := wiggle.NewWorker(client, "it-events").
 		HandleStep(name, "ship", func(s *wiggle.StepRun, o wiggle.Context) (wiggle.Context, error) {
 			if err := s.Emit("order.shipped", map[string]any{"attempt": s.Attempt(), "step": s.Name()}); err != nil {

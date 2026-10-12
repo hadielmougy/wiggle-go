@@ -3,6 +3,7 @@ package wiggle
 import (
 	"reflect"
 	"testing"
+	"time"
 )
 
 func nodeByName(def map[string]any, name string) map[string]any {
@@ -26,15 +27,9 @@ func countKind(def map[string]any, kind string) int {
 }
 
 func TestLinearGraph(t *testing.T) {
-	bp := Graph{
-		Name: "order",
-		Steps: []Node{
-			Step{Name: "validate"},
-			Gate{Name: "in-stock"},
-			Step{Name: "charge", Queue: "payments"},
-			Effect{Name: "notify"},
-		},
-	}.MustCompile()
+	bp := MustDefine("order", 0, func(f *Flow) {
+		f.ThenApply("validate").ThenFilter("in-stock").ThenApply("charge", OnQueue("payments")).ThenAccept("notify")
+	})
 	def := bp.Definition
 	if got := nodeByName(def, "validate")["kind"]; got != "TASK" {
 		t.Fatalf("validate kind = %v", got)
@@ -60,7 +55,7 @@ func TestLinearGraph(t *testing.T) {
 }
 
 func TestGateFalseEndsGated(t *testing.T) {
-	bp := Graph{Name: "wf", Steps: []Node{Step{Name: "a"}, Gate{Name: "g"}, Step{Name: "b"}}}.MustCompile()
+	bp := MustDefine("wf", 0, func(f *Flow) { f.ThenApply("a").ThenFilter("g").ThenApply("b") })
 	g := nodeByName(bp.Definition, "g")
 	end := findByID(bp.Definition, g["altNext"].(string))
 	if end["kind"] != "END" || end["reason"] != "gated:g" {
@@ -69,16 +64,13 @@ func TestGateFalseEndsGated(t *testing.T) {
 }
 
 func TestForkJoin(t *testing.T) {
-	bp := Graph{
-		Name: "order",
-		Steps: []Node{
-			Fork{Branches: []Branch{
-				{Name: "payment", Steps: []Node{Step{Name: "charge"}}},
-				{Name: "shipping", Steps: []Node{Step{Name: "reserve"}, Step{Name: "label"}}},
-			}, Combine: "merge"},
-			Effect{Name: "notify"},
-		},
-	}.MustCompile()
+	bp := MustDefine("order", 0, func(f *Flow) {
+		f.ThenAllOf(
+			func(a *Flow) { a.ThenApply("charge") },
+			func(a *Flow) { a.ThenApply("reserve").ThenApply("label") },
+		).Combine("merge").
+			ThenAccept("notify")
+	})
 	def := bp.Definition
 	if countKind(def, "FORK") != 1 || countKind(def, "JOIN") != 1 {
 		t.Fatalf("want one FORK and one JOIN")
@@ -95,7 +87,7 @@ func TestForkJoin(t *testing.T) {
 	// The join flows into the mandatory combine (a TASK carrying the arm names),
 	// and only then into the next step -- there is no implicit fold.
 	combine := nodeByName(def, "merge")
-	if combine["kind"] != "TASK" || !reflect.DeepEqual(combine["armNames"], []any{"payment", "shipping"}) {
+	if combine["kind"] != "TASK" || !reflect.DeepEqual(combine["armNames"], []any{"charge", "label"}) {
 		t.Fatalf("combine node wrong: %v", combine)
 	}
 	if join["next"] != combine["id"] {
@@ -107,30 +99,26 @@ func TestForkJoin(t *testing.T) {
 }
 
 func TestForkRequiresCombine(t *testing.T) {
-	defer func() {
-		if recover() == nil {
-			t.Fatalf("a Fork without Combine must fail to compile")
-		}
-	}()
-	_ = Graph{
-		Name: "no-combine",
-		Steps: []Node{
-			Fork{Branches: []Branch{
-				{Name: "a", Steps: []Node{Step{Name: "a1"}}},
-				{Name: "b", Steps: []Node{Step{Name: "b1"}}},
-			}},
-		},
-	}.MustCompile()
+	_, err := Define("no-combine", 0, func(f *Flow) {
+		f.ThenAllOf(func(a *Flow) { a.ThenApply("a1") }, func(b *Flow) { b.ThenApply("b1") })
+	})
+	if err == nil {
+		t.Fatalf("a ThenAllOf without Combine must fail to define")
+	}
+	_, err = Define("chained", 0, func(f *Flow) {
+		f.ThenAllOf(func(a *Flow) { a.ThenApply("a1") }, func(b *Flow) { b.ThenApply("b1") })
+		f.ThenApply("next")
+	})
+	if err == nil {
+		t.Fatalf("a step after a ThenAllOf without Combine must fail to define")
+	}
 }
 
 func TestDoWhileCycle(t *testing.T) {
-	bp := Graph{
-		Name: "wf",
-		Steps: []Node{
-			DoWhile{While: "has-more", Body: []Node{Step{Name: "fetch"}, Step{Name: "process"}}},
-			Step{Name: "finalize"},
-		},
-	}.MustCompile()
+	bp := MustDefine("wf", 0, func(f *Flow) {
+		f.RepeatWhile("has-more", 0, func(b *Flow) { b.ThenApply("fetch").ThenApply("process") }).
+			ThenApply("finalize")
+	})
 	def := bp.Definition
 	cond := nodeByName(def, "has-more")
 	if cond["kind"] != "PREDICATE" {
@@ -148,28 +136,22 @@ func TestDoWhileCycle(t *testing.T) {
 }
 
 func TestDoWhileExplicitBudget(t *testing.T) {
-	bp := Graph{
-		Name: "wf",
-		Steps: []Node{
-			DoWhile{While: "has-more", MaxIterations: 500, Body: []Node{Step{Name: "fetch"}}},
-		},
-	}.MustCompile()
+	bp := MustDefine("wf", 0, func(f *Flow) {
+		f.RepeatWhile("has-more", 500, func(b *Flow) { b.ThenApply("fetch") })
+	})
 	cond := nodeByName(bp.Definition, "has-more")
 	if cond["loopBudget"] != 500 {
 		t.Fatalf("explicit budget must serialize, got %v", cond["loopBudget"])
 	}
 	// plain gates carry no budget at all
-	bp2 := Graph{Name: "wf", Steps: []Node{Gate{Name: "g"}, Step{Name: "a"}}}.MustCompile()
+	bp2 := MustDefine("wf", 0, func(f *Flow) { f.ThenFilter("g").ThenApply("a") })
 	if _, has := nodeByName(bp2.Definition, "g")["loopBudget"]; has {
 		t.Fatalf("a plain gate must not carry a loopBudget")
 	}
 }
 
 func TestAwaitSignalEscalation(t *testing.T) {
-	bp := Graph{
-		Name:  "wf",
-		Steps: []Node{Step{Name: "submit"}, AwaitSignal{Name: "approval"}},
-	}.MustCompile()
+	bp := MustDefine("wf", 0, func(f *Flow) { f.ThenApply("submit").ThenAwait("approval", 0, nil) })
 	if nodeByName(bp.Definition, "approval")["kind"] != "SIGNAL" {
 		t.Fatalf("approval is not a SIGNAL node")
 	}
@@ -177,7 +159,7 @@ func TestAwaitSignalEscalation(t *testing.T) {
 
 func TestContentVersionDeterministic(t *testing.T) {
 	build := func() int {
-		return Graph{Name: "wf", Steps: []Node{Step{Name: "a"}, Gate{Name: "g"}, Effect{Name: "n"}}}.MustCompile().Version
+		return MustDefine("wf", 0, func(f *Flow) { f.ThenApply("a").ThenFilter("g").ThenAccept("n") }).Version
 	}
 	v1, v2 := build(), build()
 	if v1 != v2 || v1 <= 0 {
@@ -186,7 +168,7 @@ func TestContentVersionDeterministic(t *testing.T) {
 }
 
 func TestExplicitVersion(t *testing.T) {
-	if v := (Graph{Name: "wf", Version: 7, Steps: []Node{Step{Name: "a"}}}).MustCompile().Version; v != 7 {
+	if v := MustDefine("wf", 7, func(f *Flow) { f.ThenApply("a") }).Version; v != 7 {
 		t.Fatalf("explicit version = %d", v)
 	}
 }
@@ -209,14 +191,10 @@ func TestTaskReturnIsSentWhole(t *testing.T) {
 }
 
 func TestForEachEmitsCombine(t *testing.T) {
-	bp := Graph{
-		Name: "each",
-		Steps: []Node{
-			ForEach{Name: "per-item", ItemsKey: "items",
-				Body: []Node{Step{Name: "price"}}, Combine: "collect"},
-			Step{Name: "after"},
-		},
-	}.MustCompile()
+	bp := MustDefine("each", 0, func(f *Flow) {
+		f.ThenForEach("per-item", "items", func(b *Flow) { b.ThenApply("price") }).Combine("collect").
+			ThenApply("after")
+	})
 	def := bp.Definition
 	combine := nodeByName(def, "collect")
 	if combine["kind"] != "TASK" || combine["collectKey"] != "__forEach__per-item" {
@@ -237,18 +215,16 @@ func TestForEachEmitsCombine(t *testing.T) {
 }
 
 func TestForEachRequiresCombine(t *testing.T) {
-	defer func() {
-		if recover() == nil {
-			t.Fatalf("a ForEach without Combine must fail to compile")
-		}
-	}()
-	_ = Graph{Name: "bad", Steps: []Node{
-		ForEach{Name: "x", ItemsKey: "items", Body: []Node{Step{Name: "s"}}},
-	}}.MustCompile()
+	_, err := Define("bad", 0, func(f *Flow) {
+		f.ThenForEach("x", "items", func(b *Flow) { b.ThenApply("s") })
+	})
+	if err == nil {
+		t.Fatalf("a ThenForEach without Combine must fail to define")
+	}
 }
 
 func TestDuplicateStepErrors(t *testing.T) {
-	_, err := Graph{Name: "wf", Steps: []Node{Step{Name: "a"}, Step{Name: "a"}}}.Compile()
+	_, err := Define("wf", 0, func(f *Flow) { f.ThenApply("a").ThenApply("a") })
 	if err == nil {
 		t.Fatalf("expected an error on duplicate step name")
 	}
@@ -265,11 +241,9 @@ func findByID(def map[string]any, id string) map[string]any {
 }
 
 func TestCompensateFlagSerializes(t *testing.T) {
-	def := Graph{Name: "saga", Steps: []Node{
-		Step{Name: "reserve", Compensate: true},
-		Effect{Name: "audit", Compensate: true},
-		Step{Name: "plain"},
-	}}.MustCompile().Definition
+	def := MustDefine("saga", 0, func(f *Flow) {
+		f.ThenApplyCompensable("reserve").ThenApplyCompensable("audit").ThenApply("plain")
+	}).Definition
 	byName := map[string]map[string]any{}
 	for _, n := range asList(def["nodes"]) {
 		node := n.(map[string]any)
@@ -277,13 +251,65 @@ func TestCompensateFlagSerializes(t *testing.T) {
 		byName[name] = node
 	}
 	if byName["reserve"]["compensable"] != true {
-		t.Fatalf("Step.Compensate must serialize compensable:true, got %v", byName["reserve"])
+		t.Fatalf("ThenApplyCompensable must serialize compensable:true, got %v", byName["reserve"])
 	}
 	if byName["audit"]["compensable"] != true {
-		t.Fatalf("Effect.Compensate must serialize compensable:true, got %v", byName["audit"])
+		t.Fatalf("ThenApplyCompensable must serialize compensable:true, got %v", byName["audit"])
 	}
 	// Absent (not false) when unset — the field must not disturb existing content hashes.
 	if _, present := byName["plain"]["compensable"]; present {
-		t.Fatalf("an unset Compensate must not serialize at all, got %v", byName["plain"])
+		t.Fatalf("a plain ThenApply must not serialize at all, got %v", byName["plain"])
+	}
+}
+
+func TestDefineNestsEveryShape(t *testing.T) {
+	def := MustDefine("nest", 0, func(f *Flow) {
+		f.DefaultQueue("main").
+			ThenApply("start").
+			ThenAwait("approve", time.Minute, func(e *Flow) { e.ThenApply("escalate") }).
+			ThenOneOf(
+				When("vip", func(a *Flow) {
+					a.ThenAllOf(func(x *Flow) { x.ThenApply("x1") }, func(y *Flow) { y.ThenFilter("y1") }).Combine("xy")
+				}),
+				Otherwise(func(a *Flow) { a.ThenSubFlow("", "child") }),
+			).
+			ThenSleep(time.Second)
+	}).Definition
+	if def["queues"].([]any)[0] != "main" {
+		t.Fatalf("default queue not applied: %v", def["queues"])
+	}
+	if nodeByName(def, "approve")["altNext"] != nodeByName(def, "escalate")["id"] {
+		t.Fatalf("a timeout must run the escalation")
+	}
+	if !reflect.DeepEqual(nodeByName(def, "xy")["armNames"], []any{"x1", "y1"}) {
+		t.Fatalf("arms are named after their last step: %v", nodeByName(def, "xy"))
+	}
+	if nodeByName(def, "child")["kind"] != "SUB_WORKFLOW" || nodeByName(def, "sleep-1000ms")["kind"] != "SLEEP" {
+		t.Fatalf("sub-flow or sleep missing")
+	}
+}
+
+func TestDefineMistakes(t *testing.T) {
+	for name, body := range map[string]func(*Flow){
+		"no steps":             func(f *Flow) {},
+		"a nameless step":      func(f *Flow) { f.ThenApply("") },
+		"combine with no task": func(f *Flow) { f.Combine("c") },
+		"combine after a gate": func(f *Flow) { f.ThenFilter("g").Combine("c") },
+		"one arm":              func(f *Flow) { f.ThenAllOf(func(a *Flow) { a.ThenApply("a") }).Combine("c") },
+		"an empty arm":         func(f *Flow) { f.ThenAllOf(func(a *Flow) { a.ThenApply("a") }, nil).Combine("c") },
+		"an arm ending in sleep": func(f *Flow) {
+			f.ThenAllOf(func(a *Flow) { a.ThenApply("a") }, func(a *Flow) { a.ThenSleep(time.Second) }).Combine("c")
+		},
+		"an empty forEach":       func(f *Flow) { f.ThenForEach("e", "xs", nil).Combine("c") },
+		"otherwise first":        func(f *Flow) { f.ThenOneOf(Otherwise(func(a *Flow) { a.ThenApply("a") })) },
+		"an empty loop":          func(f *Flow) { f.RepeatWhile("more", 0, nil) },
+		"escalation, no timeout": func(f *Flow) { f.ThenAwait("go", 0, func(e *Flow) { e.ThenApply("x") }) },
+		"a nested mistake": func(f *Flow) {
+			f.ThenOneOf(When("g", func(a *Flow) { a.ThenAllOf(func(x *Flow) { x.ThenApply("x") }) }))
+		},
+	} {
+		if _, err := Define("bad", 0, body); err == nil {
+			t.Errorf("%s: want an error", name)
+		}
 	}
 }

@@ -34,17 +34,14 @@ func main() {
 	defer client.Close()
 	ctx := context.Background()
 
-	// The topology is declarative data -- a Graph that mirrors the YAML/graph schema. Compile it to a
-	// *FlowSpec you register. Handlers are bound separately, by name (below).
-	wf := wiggle.Graph{
-		Name: "order",
-		Steps: []wiggle.Node{
-			wiggle.Step{Name: "validate"},
-			wiggle.Gate{Name: "in-stock"},
-			wiggle.Step{Name: "charge", Queue: "payments", Retry: wiggle.RetryExponential(5, 100*time.Millisecond)},
-			wiggle.Effect{Name: "notify"},
-		},
-	}.MustCompile()
+	// The topology is a chain of named steps, defined into a *FlowSpec you register. Handlers are
+	// bound separately, by name (below).
+	wf := wiggle.MustDefine("order", 1, func(f *wiggle.Flow) {
+		f.ThenApply("validate").
+			ThenFilter("in-stock").
+			ThenApply("charge", wiggle.OnQueue("payments"), wiggle.WithRetry(wiggle.RetryExponential(5, 100*time.Millisecond))).
+			ThenAccept("notify")
+	})
 
 	client.Register(ctx, wf)
 
@@ -78,74 +75,73 @@ WIGGLE_URL=localhost:8080 go run ./examples/order
 
 ## Topology
 
-A workflow's shape is declarative Go data — a `Graph` whose `Steps` is a slice of `Node` values that
-mirror the YAML/graph schema. `Compile()` turns it into a `*FlowSpec` you register (it validates the
-shape and returns an error); `MustCompile()` panics instead, for a literal known-good at build time.
-Handlers are **not** part of the topology — a worker binds them separately, by name (see below).
+A workflow is defined as a chain, in the Java client's vocabulary: `Define(name, version, body)`
+runs `body` once on a `*Flow`, recording the steps it chains, and compiles them into a `*FlowSpec`
+you register. It returns an error for an invalid topology; `MustDefine` panics instead, for a flow
+known to be valid when it is written. Version `0` publishes under a hash of the graph's content.
+Steps are only **named** here — a worker binds their handlers separately, by name (see below).
 
 ```go
-wf := wiggle.Graph{
-	Name: "order",
-	// DefaultQueue: "order",   // queue for steps that don't set their own (defaults to the name)
-	Steps: []wiggle.Node{
-		wiggle.Step{Name: "validate"},
-		wiggle.Gate{Name: "in-stock"},
-		wiggle.Fork{Branches: []wiggle.Branch{
-			{Name: "payment",  Steps: []wiggle.Node{wiggle.Step{Name: "charge", Queue: "payments"}}},
-			{Name: "shipping", Steps: []wiggle.Node{wiggle.Step{Name: "reserve"}, wiggle.Step{Name: "label"}}},
-		}, Combine: "merge"}, // mandatory: branches rejoin at an explicit merge handler (HandleCombine)
-		wiggle.Choose{Cases: []wiggle.Case{
-			{When: "vip", Then: []wiggle.Node{wiggle.Step{Name: "concierge"}}},
-			{Then: []wiggle.Node{wiggle.Step{Name: "thanks"}}}, // no When -> the otherwise case (must be last)
-		}},
-		wiggle.Effect{Name: "notify"},
-	},
-}.MustCompile()
+wf := wiggle.MustDefine("order", 1, func(f *wiggle.Flow) {
+	f.ThenApply("validate").
+		ThenFilter("in-stock").
+		ThenAllOf(
+			func(a *wiggle.Flow) { a.ThenApply("charge", wiggle.OnQueue("payments")) },
+			func(a *wiggle.Flow) { a.ThenApply("reserve").ThenApply("label") },
+		).Combine("merge"). // mandatory: the arms rejoin at an explicit merge handler (HandleCombine)
+		ThenOneOf(
+			wiggle.When("vip", func(a *wiggle.Flow) { a.ThenApply("concierge") }),
+			wiggle.Otherwise(func(a *wiggle.Flow) { a.ThenApply("thanks") }), // optional, and last
+		).
+		ThenAccept("notify")
+})
 ```
 
-| Node | Meaning |
+| Method | Meaning |
 |---|---|
-| `Step{Name, Queue, Retry, Compensate}` | a task run on a worker (`Handle`); only changed context keys are merged back. `Compensate: true` declares an undo run in the reverse pass if the instance later fails |
-| `Effect{Name, Queue, Retry, Compensate}` | a side-effect step (`HandleEffect`); context unchanged |
-| `Gate{Name, Queue, Retry}` | a predicate (`HandleGate`); false ends the instance as `gated:<name>` |
-| `Fork{Branches, Combine}` | run branches in parallel on isolated context copies, then rejoin at the **mandatory** `Combine` step (`HandleCombine`) — no implicit fold |
-| `ForEach{Name, ItemsKey, Body, Combine}` | runtime fan-out: one **isolated** branch per element of the list (or map) at `ItemsKey`. **The element IS the item's context** — body steps are bound with `HandleItem(base, item)` and their return replaces the item's value (scalars included). The **mandatory** `Combine` handler receives every item's final value collected under `Name` (a list, or a map keyed like the input) and returns the complete post-join context |
-| `Choose{Cases}` | exclusive choice: the first `Case` whose `When` guard holds runs; a `Case` with no `When` is the otherwise (last) |
-| `DoWhile{While, MaxIterations, Body}` | run `Body`, then repeat while the `While` predicate holds (body runs at least once). The guard may hold at most `MaxIterations` times (0 = the engine default, 10,000) before the instance fails |
-| `SubWorkflow{Name, Workflow}` | run another workflow as a child; its result merges back |
-| `Sleep{Name, For}` | server-side timer (`For` is a `time.Duration`); no worker is held |
-| `AwaitSignal{Name, Timeout, Escalation}` | wait for a signal (`Client.Signal`); on `Timeout`, fail — or run `Escalation` and rejoin |
+| `ThenApply(name, opts…)` | a task run on a worker (`Handle`); its return becomes the context |
+| `ThenApplyCompensable(name, opts…)` | a task whose undo runs in the reverse pass if the instance later fails (see [Compensation](#compensation-sagas)) |
+| `ThenAccept(name, opts…)` | a side effect (`HandleEffect`); the context is unchanged |
+| `ThenFilter(name, opts…)` | a gate (`HandleGate`); false ends the instance as `gated:<name>`, or ends a `ThenAllOf` arm at the join |
+| `ThenAllOf(arms…).Combine(name)` | run the arms in parallel on isolated context copies, then rejoin at the **mandatory** combine (`HandleCombine`) — no implicit fold. Each arm is named after its last step, which must be a task or a gate |
+| `ThenForEach(name, itemsKey, body).Combine(name)` | runtime fan-out: one **isolated** branch per element of the list (or map) at `itemsKey`. **The element IS the item's context** — body steps are bound with `HandleItem(base, item)` and their return replaces the item's value (scalars included). The **mandatory** combine receives every item's final value collected under `name` (a list, or a map keyed like the input) and returns the complete post-join context |
+| `ThenOneOf(When(guard, arm)…, Otherwise(arm))` | exclusive choice: the first arm whose guard holds runs, else `Otherwise`; with no `Otherwise`, the flow goes on past it |
+| `RepeatWhile(condition, maxIterations, body)` | run `body`, then repeat while the `condition` gate holds (the body runs at least once). It may hold at most `maxIterations` times (0 = the engine default, 10,000) before the instance fails |
+| `ThenSubFlow(node, workflow)` | run another registered workflow as a child; its result merges back |
+| `ThenSleep(d)` | a server-side timer; no worker is held |
+| `ThenAwait(signal, timeout, escalation)` | wait for a signal (`Client.Signal`); on a positive `timeout`, fail — or run `escalation` and go on |
+| `.Combine(name)` after `ThenApply`/`ThenAccept` | make that task a spawning step that creates branches at run time (see [below](#branches-created-at-run-time)) |
 
 A fork's combine is bound with `HandleCombine(workflow, step, fn)`: `fn` receives the context with
-each branch's result staged under the branch's name, and must return the **complete** post-join
+each arm's result staged under the arm's name (its last step's), and must return the **complete** post-join
 context — the engine replaces the context with it, so keys the handler omits do not survive the
 join (there is no implicit union of the arms). The engine stages the arm results under reserved
-keys; the worker hands them to `fn` under the branch names, and fails the step if a branch name is
-also a key of the context itself (rename one of them).
+keys; the worker hands them to `fn` under the arm names, and fails the step if an arm name is also
+a key of the context itself (rename one of them).
 
 ```go
 worker.HandleCombine("order", "merge", func(ctx wiggle.Context) (wiggle.Context, error) {
 	out := wiggle.Context{}
 	for k, v := range ctx { out[k] = v }          // carry the pre-fork context explicitly
-	delete(out, "payment"); delete(out, "shipping") // drop the staged arm keys
-	if p, ok := ctx["payment"].(map[string]any); ok {
-		for k, v := range p { out[k] = v }         // fold what the payment arm produced
+	delete(out, "charge"); delete(out, "label")     // drop the staged arm keys
+	if p, ok := ctx["charge"].(map[string]any); ok {
+		for k, v := range p { out[k] = v }         // fold what the charge arm produced
 	}
-	if s, ok := ctx["shipping"].(map[string]any); ok {
+	if s, ok := ctx["label"].(map[string]any); ok {
 		for k, v := range s { out[k] = v }
 	}
 	return out, nil
 })
 ```
 
-Per-step: `Queue` (defaults to `DefaultQueue`, else the workflow name) and `Retry`, a
-`RetryPolicy` (`RetryExponential/RetryFixed/RetryNone/RetryForever`). `Branch{Name, Steps}` and `Case{When, Then}`
-are themselves declarative slices of `Node`, so branches and bodies nest arbitrarily. A graph may
-also declare `Attributes` for [queue criteria](#queue-criteria) to test.
+Every step takes `OnQueue(queue)` (default: `f.DefaultQueue(queue)`, else the workflow name) and
+`WithRetry(policy)`, a `RetryPolicy` (`RetryExponential/RetryFixed/RetryNone/RetryForever`; default:
+retry forever). Arms and bodies are `*Flow`s of their own, so they nest arbitrarily. A flow may also
+declare `f.Attribute(name, type, path)` for [queue criteria](#queue-criteria) to test.
 
 ## Compensation (sagas)
 
-A step declared `Compensate: true` is undone when the instance later fails: the engine runs the
+A step chained with `ThenApplyCompensable` is undone when the instance later fails: the engine runs the
 step's **compensator** in the reverse pass (newest-completed first) as a real durable task, handing
 it the step's **input/result context snapshots** captured at completion — not the instance's latest
 context, which a later step may have replaced. The instance settles `COMPENSATED` (or
@@ -284,15 +280,16 @@ and finish times, which feed `StepStats`.
 
 ## Branches created at run time
 
-A step declared with a `Combine` is a **spawning step**: its handler may open branches with
+A task followed by `.Combine(name)` is a **spawning step**: its handler may open branches with
 `StepRun.Create(input)` (or `CreateKeyed(key, input)`), each running its own chain of steps on an
 isolated copy of `input`. The branches ride the step's report and commit with it. The combine
 receives their results through `StepRun.Results()`: a `[]any` in creation order, or a
 `map[string]any` by key.
 
 ```go
-wf := wiggle.Graph{Name: "orders", Steps: []wiggle.Node{
-	wiggle.Step{Name: "fulfil", Combine: "summarise"}, wiggle.Step{Name: "notify"}}}.MustCompile()
+wf := wiggle.MustDefine("orders", 1, func(f *wiggle.Flow) {
+	f.ThenApply("fulfil").Combine("summarise").ThenAccept("notify")
+})
 
 w := wiggle.NewWorker(client, "w1").
 	BranchSteps("orders", "reserve", "ship"). // in no graph: bound on first dispatch
@@ -332,8 +329,10 @@ step, node, kind, attempt, correlation id, creation time, or **attributes** the 
 from its context.
 
 ```go
-wf := wiggle.Graph{Name: "orders", Steps: []wiggle.Node{wiggle.Step{Name: "charge", Queue: "payments"}},
-	Attributes: []wiggle.DispatchAttribute{{Name: "tier", Type: "STRING", Path: "customer.tier"}}}.MustCompile()
+wf := wiggle.MustDefine("orders", 1, func(f *wiggle.Flow) {
+	f.Attribute("tier", "STRING", "customer.tier").
+		ThenApply("charge", wiggle.OnQueue("payments"))
+})
 
 gold, err := criteria.New("payments", criteria.And(
 	criteria.Equal(criteria.Attr("tier"), "gold"),

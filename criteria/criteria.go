@@ -52,7 +52,7 @@ var (
 
 var attributeName = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
 
-// Attr is a value the workflow declares (wiggle.Graph{Attributes: ...}).
+// Attr is a value the workflow declares (Flow.Attribute).
 func Attr(name string) Attribute { return Attribute{Field: "ATTRIBUTE", Name: name, Type: "ANY"} }
 
 // Decimal is an exact decimal literal for an attribute comparison, as its decimal text ("12.50").

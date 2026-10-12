@@ -36,15 +36,12 @@ func dialTest(t *testing.T) (*wiggle.Client, context.Context) {
 
 // order is the declarative topology (no handlers). Each test binds handlers by name (bindOrder).
 func order(name string) *wiggle.FlowSpec {
-	return wiggle.Graph{
-		Name: name,
-		Steps: []wiggle.Node{
-			wiggle.Step{Name: "validate"},
-			wiggle.Gate{Name: "in-stock"},
-			wiggle.Step{Name: "charge", Queue: name + "-payments"}, // unique per workflow so tests don't share a queue
-			wiggle.Effect{Name: "done"},
-		},
-	}.MustCompile()
+	return wiggle.MustDefine(name, 0, func(f *wiggle.Flow) {
+		f.ThenApply("validate").
+			ThenFilter("in-stock").
+			ThenApply("charge", wiggle.OnQueue(name+"-payments")). // unique per workflow so tests don't share a queue
+			ThenAccept("done")
+	})
 }
 
 // bindOrder attaches the order handlers to a worker by (workflow, step) name.
@@ -147,11 +144,11 @@ func TestIntegrationReconcileRejectsUnknownStep(t *testing.T) {
 func TestIntegrationCompensation(t *testing.T) {
 	client, ctx := dialTest(t)
 	name := fmt.Sprintf("go-it-saga-%d", time.Now().UnixNano())
-	wf := wiggle.Graph{Name: name, Steps: []wiggle.Node{
-		wiggle.Step{Name: "reserve", Compensate: true},
-		wiggle.Step{Name: "overwrite"}, // replaces the context: proves the compensator sees SNAPSHOTS
-		wiggle.Step{Name: "boom"},
-	}}.MustCompile()
+	wf := wiggle.MustDefine(name, 0, func(f *wiggle.Flow) {
+		f.ThenApplyCompensable("reserve").
+			ThenApply("overwrite"). // replaces the context: proves the compensator sees SNAPSHOTS
+			ThenApply("boom")
+	})
 	if _, err := client.Register(ctx, wf); err != nil {
 		t.Fatalf("register: %v", err)
 	}

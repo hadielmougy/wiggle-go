@@ -28,12 +28,9 @@ func (orderHandlers) Notify(o Context) error              { return nil }
 func (orderHandlers) helper() string                      { return "ignored (unexported)" } //nolint:unused
 
 func orderGraph() map[string]any {
-	return Graph{Name: "order", Steps: []Node{
-		Step{Name: "validate"},
-		Gate{Name: "in-stock"},
-		Step{Name: "charge", Queue: "payments"},
-		Effect{Name: "notify"},
-	}}.MustCompile().Definition
+	return MustDefine("order", 0, func(f *Flow) {
+		f.ThenApply("validate").ThenFilter("in-stock").ThenApply("charge", OnQueue("payments")).ThenAccept("notify")
+	}).Definition
 }
 
 func TestRegisterHandlersMatchesByNameAndKind(t *testing.T) {
@@ -142,13 +139,10 @@ func (eachHandlers) Norm(base Context, item any) (any, error) { return item, nil
 func (eachHandlers) Collect(ctx Context) (Context, error)     { return ctx, nil }
 
 func TestBindHandlerSetIsPure(t *testing.T) {
-	bp := Graph{
-		Name: "each",
-		Steps: []Node{
-			ForEach{Name: "per-item", ItemsKey: "items", Body: []Node{Step{Name: "norm"}}, Combine: "collect"},
-			Step{Name: "after", Queue: "special"},
-		},
-	}.MustCompile()
+	bp := MustDefine("each", 0, func(f *Flow) {
+		f.ThenForEach("per-item", "items", func(b *Flow) { b.ThenApply("norm") }).Combine("collect").
+			ThenApply("after", OnQueue("special"))
+	})
 
 	w := NewWorker(nil, "w").RegisterHandler("each", eachHandlers{})
 	bindings, err := bindHandlerSet(bp.Definition, w.handlerSets[0])
@@ -186,15 +180,9 @@ func (badCombineHandlers) B1(ctx Context) (Context, error) { return ctx, nil }
 func (badCombineHandlers) Merge(ctx Context) error         { return nil } // an effect shape can't combine
 
 func TestBindRejectsNonActivityCombine(t *testing.T) {
-	bp := Graph{
-		Name: "wf",
-		Steps: []Node{
-			Fork{Branches: []Branch{
-				{Name: "a", Steps: []Node{Step{Name: "a1"}}},
-				{Name: "b", Steps: []Node{Step{Name: "b1"}}},
-			}, Combine: "merge"},
-		},
-	}.MustCompile()
+	bp := MustDefine("wf", 0, func(f *Flow) {
+		f.ThenAllOf(func(a *Flow) { a.ThenApply("a1") }, func(b *Flow) { b.ThenApply("b1") }).Combine("merge")
+	})
 	w := NewWorker(nil, "w").RegisterHandler("wf", badCombineHandlers{})
 	if _, err := bindHandlerSet(bp.Definition, w.handlerSets[0]); err == nil {
 		t.Fatalf("a combine bound to a non-Activity shape must fail")
@@ -204,10 +192,9 @@ func TestBindRejectsNonActivityCombine(t *testing.T) {
 // ---- compensation pairing (mirrors Java HandlerBinder / SagaCompensationTest bind rules) ----
 
 func sagaGraph() map[string]any {
-	return Graph{Name: "saga", Steps: []Node{
-		Step{Name: "reserve", Compensate: true},
-		Step{Name: "charge", Queue: "payments"},
-	}}.MustCompile().Definition
+	return MustDefine("saga", 0, func(f *Flow) {
+		f.ThenApplyCompensable("reserve").ThenApply("charge", OnQueue("payments"))
+	}).Definition
 }
 
 type sagaHandlers struct{ got *Compensation }

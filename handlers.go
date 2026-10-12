@@ -286,7 +286,7 @@ func (w *Worker) applyBindings(bindings []binding) error {
 // bindHandlerSet matches a set's candidates to the graph's steps by canonical name, validates each
 // candidate's shape against its node kind, and builds the invocation wrappers. PURE: graph in,
 // bindings out -- no I/O, no worker state -- so every rule here is testable offline against a
-// compiled Graph's Definition (mirrors the Java HandlerBinder / Python wiggle._binder).
+// FlowSpec's Definition (mirrors the Java HandlerBinder / Python wiggle._binder).
 func bindHandlerSet(graph map[string]any, set handlerSet) ([]binding, error) {
 	nodeByCanon := map[string]map[string]any{} // canonical step name -> node
 	stepByCanon := map[string]string{}         // canonical step name -> real step name
