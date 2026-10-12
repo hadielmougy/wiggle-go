@@ -22,6 +22,282 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type SearchRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Every word must occur in the instance's correlation id, context, termination reason or error;
+	// empty matches every instance the filters allow.
+	Text     string  `protobuf:"bytes,1,opt,name=text,proto3" json:"text,omitempty"`
+	Workflow *string `protobuf:"bytes,2,opt,name=workflow,proto3,oneof" json:"workflow,omitempty"`
+	Status   *string `protobuf:"bytes,3,opt,name=status,proto3,oneof" json:"status,omitempty"`
+	// Bounds on when the instance last changed (epoch millis); 0 = open.
+	UpdatedFrom int64 `protobuf:"varint,4,opt,name=updated_from,json=updatedFrom,proto3" json:"updated_from,omitempty"`
+	UpdatedTo   int64 `protobuf:"varint,5,opt,name=updated_to,json=updatedTo,proto3" json:"updated_to,omitempty"`
+	Limit       int32 `protobuf:"varint,6,opt,name=limit,proto3" json:"limit,omitempty"`
+	// Answer from the search shards that respond when one does not, and say so in `partial`.
+	PartialOk bool `protobuf:"varint,7,opt,name=partial_ok,json=partialOk,proto3" json:"partial_ok,omitempty"`
+	// Rank by closeness in meaning (vector search) instead of by the words; needs an embedder and a
+	// complete vector index, else FAILED_PRECONDITION.
+	Semantic      bool `protobuf:"varint,8,opt,name=semantic,proto3" json:"semantic,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SearchRequest) Reset() {
+	*x = SearchRequest{}
+	mi := &file_wiggle_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SearchRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SearchRequest) ProtoMessage() {}
+
+func (x *SearchRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_wiggle_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SearchRequest.ProtoReflect.Descriptor instead.
+func (*SearchRequest) Descriptor() ([]byte, []int) {
+	return file_wiggle_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *SearchRequest) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *SearchRequest) GetWorkflow() string {
+	if x != nil && x.Workflow != nil {
+		return *x.Workflow
+	}
+	return ""
+}
+
+func (x *SearchRequest) GetStatus() string {
+	if x != nil && x.Status != nil {
+		return *x.Status
+	}
+	return ""
+}
+
+func (x *SearchRequest) GetUpdatedFrom() int64 {
+	if x != nil {
+		return x.UpdatedFrom
+	}
+	return 0
+}
+
+func (x *SearchRequest) GetUpdatedTo() int64 {
+	if x != nil {
+		return x.UpdatedTo
+	}
+	return 0
+}
+
+func (x *SearchRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *SearchRequest) GetPartialOk() bool {
+	if x != nil {
+		return x.PartialOk
+	}
+	return false
+}
+
+func (x *SearchRequest) GetSemantic() bool {
+	if x != nil {
+		return x.Semantic
+	}
+	return false
+}
+
+type SearchHit struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	InstanceId    string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
+	Workflow      string                 `protobuf:"bytes,2,opt,name=workflow,proto3" json:"workflow,omitempty"`
+	Version       int32                  `protobuf:"varint,3,opt,name=version,proto3" json:"version,omitempty"`
+	Status        string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+	CorrelationId string                 `protobuf:"bytes,5,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"`
+	CreatedAt     int64                  `protobuf:"varint,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt     int64                  `protobuf:"varint,7,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Score         float64                `protobuf:"fixed64,8,opt,name=score,proto3" json:"score,omitempty"`
+	// The instance itself has been purged; its document outlives it until its own retention.
+	Purged        bool `protobuf:"varint,9,opt,name=purged,proto3" json:"purged,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SearchHit) Reset() {
+	*x = SearchHit{}
+	mi := &file_wiggle_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SearchHit) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SearchHit) ProtoMessage() {}
+
+func (x *SearchHit) ProtoReflect() protoreflect.Message {
+	mi := &file_wiggle_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SearchHit.ProtoReflect.Descriptor instead.
+func (*SearchHit) Descriptor() ([]byte, []int) {
+	return file_wiggle_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *SearchHit) GetInstanceId() string {
+	if x != nil {
+		return x.InstanceId
+	}
+	return ""
+}
+
+func (x *SearchHit) GetWorkflow() string {
+	if x != nil {
+		return x.Workflow
+	}
+	return ""
+}
+
+func (x *SearchHit) GetVersion() int32 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *SearchHit) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *SearchHit) GetCorrelationId() string {
+	if x != nil {
+		return x.CorrelationId
+	}
+	return ""
+}
+
+func (x *SearchHit) GetCreatedAt() int64 {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return 0
+}
+
+func (x *SearchHit) GetUpdatedAt() int64 {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return 0
+}
+
+func (x *SearchHit) GetScore() float64 {
+	if x != nil {
+		return x.Score
+	}
+	return 0
+}
+
+func (x *SearchHit) GetPurged() bool {
+	if x != nil {
+		return x.Purged
+	}
+	return false
+}
+
+type SearchResult struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Hits    []*SearchHit           `protobuf:"bytes,1,rep,name=hits,proto3" json:"hits,omitempty"`
+	Partial bool                   `protobuf:"varint,2,opt,name=partial,proto3" json:"partial,omitempty"`
+	// The embedding model a semantic search used; empty for a text search.
+	Model         string `protobuf:"bytes,3,opt,name=model,proto3" json:"model,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SearchResult) Reset() {
+	*x = SearchResult{}
+	mi := &file_wiggle_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SearchResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SearchResult) ProtoMessage() {}
+
+func (x *SearchResult) ProtoReflect() protoreflect.Message {
+	mi := &file_wiggle_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SearchResult.ProtoReflect.Descriptor instead.
+func (*SearchResult) Descriptor() ([]byte, []int) {
+	return file_wiggle_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *SearchResult) GetHits() []*SearchHit {
+	if x != nil {
+		return x.Hits
+	}
+	return nil
+}
+
+func (x *SearchResult) GetPartial() bool {
+	if x != nil {
+		return x.Partial
+	}
+	return false
+}
+
+func (x *SearchResult) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
 type Empty struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -30,7 +306,7 @@ type Empty struct {
 
 func (x *Empty) Reset() {
 	*x = Empty{}
-	mi := &file_wiggle_proto_msgTypes[0]
+	mi := &file_wiggle_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -42,7 +318,7 @@ func (x *Empty) String() string {
 func (*Empty) ProtoMessage() {}
 
 func (x *Empty) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[0]
+	mi := &file_wiggle_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -55,7 +331,7 @@ func (x *Empty) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Empty.ProtoReflect.Descriptor instead.
 func (*Empty) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{0}
+	return file_wiggle_proto_rawDescGZIP(), []int{3}
 }
 
 type Ack struct {
@@ -67,7 +343,7 @@ type Ack struct {
 
 func (x *Ack) Reset() {
 	*x = Ack{}
-	mi := &file_wiggle_proto_msgTypes[1]
+	mi := &file_wiggle_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -79,7 +355,7 @@ func (x *Ack) String() string {
 func (*Ack) ProtoMessage() {}
 
 func (x *Ack) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[1]
+	mi := &file_wiggle_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -92,7 +368,7 @@ func (x *Ack) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Ack.ProtoReflect.Descriptor instead.
 func (*Ack) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{1}
+	return file_wiggle_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Ack) GetOk() bool {
@@ -113,7 +389,7 @@ type HealthStatus struct {
 
 func (x *HealthStatus) Reset() {
 	*x = HealthStatus{}
-	mi := &file_wiggle_proto_msgTypes[2]
+	mi := &file_wiggle_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -125,7 +401,7 @@ func (x *HealthStatus) String() string {
 func (*HealthStatus) ProtoMessage() {}
 
 func (x *HealthStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[2]
+	mi := &file_wiggle_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -138,7 +414,7 @@ func (x *HealthStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthStatus.ProtoReflect.Descriptor instead.
 func (*HealthStatus) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{2}
+	return file_wiggle_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *HealthStatus) GetStatus() string {
@@ -177,7 +453,7 @@ type ClusterMember struct {
 
 func (x *ClusterMember) Reset() {
 	*x = ClusterMember{}
-	mi := &file_wiggle_proto_msgTypes[3]
+	mi := &file_wiggle_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -189,7 +465,7 @@ func (x *ClusterMember) String() string {
 func (*ClusterMember) ProtoMessage() {}
 
 func (x *ClusterMember) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[3]
+	mi := &file_wiggle_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -202,7 +478,7 @@ func (x *ClusterMember) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClusterMember.ProtoReflect.Descriptor instead.
 func (*ClusterMember) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{3}
+	return file_wiggle_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ClusterMember) GetId() string {
@@ -265,7 +541,7 @@ type ClusterView struct {
 
 func (x *ClusterView) Reset() {
 	*x = ClusterView{}
-	mi := &file_wiggle_proto_msgTypes[4]
+	mi := &file_wiggle_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -277,7 +553,7 @@ func (x *ClusterView) String() string {
 func (*ClusterView) ProtoMessage() {}
 
 func (x *ClusterView) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[4]
+	mi := &file_wiggle_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -290,7 +566,7 @@ func (x *ClusterView) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClusterView.ProtoReflect.Descriptor instead.
 func (*ClusterView) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{4}
+	return file_wiggle_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ClusterView) GetSelf() string {
@@ -315,15 +591,18 @@ func (x *ClusterView) GetMembers() []*ClusterMember {
 }
 
 type WorkflowDefinition struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Definition    *structpb.Struct       `protobuf:"bytes,1,opt,name=definition,proto3" json:"definition,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Definition *structpb.Struct       `protobuf:"bytes,1,opt,name=definition,proto3" json:"definition,omitempty"`
+	// RegisterWorkflow only: replace an already-registered (name, version) whose graph differs,
+	// instead of failing. The server refuses unless it is configured to allow it.
+	Force         bool `protobuf:"varint,2,opt,name=force,proto3" json:"force,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *WorkflowDefinition) Reset() {
 	*x = WorkflowDefinition{}
-	mi := &file_wiggle_proto_msgTypes[5]
+	mi := &file_wiggle_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -335,7 +614,7 @@ func (x *WorkflowDefinition) String() string {
 func (*WorkflowDefinition) ProtoMessage() {}
 
 func (x *WorkflowDefinition) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[5]
+	mi := &file_wiggle_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -348,7 +627,7 @@ func (x *WorkflowDefinition) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowDefinition.ProtoReflect.Descriptor instead.
 func (*WorkflowDefinition) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{5}
+	return file_wiggle_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *WorkflowDefinition) GetDefinition() *structpb.Struct {
@@ -356,6 +635,13 @@ func (x *WorkflowDefinition) GetDefinition() *structpb.Struct {
 		return x.Definition
 	}
 	return nil
+}
+
+func (x *WorkflowDefinition) GetForce() bool {
+	if x != nil {
+		return x.Force
+	}
+	return false
 }
 
 type WorkflowNames struct {
@@ -367,7 +653,7 @@ type WorkflowNames struct {
 
 func (x *WorkflowNames) Reset() {
 	*x = WorkflowNames{}
-	mi := &file_wiggle_proto_msgTypes[6]
+	mi := &file_wiggle_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -379,7 +665,7 @@ func (x *WorkflowNames) String() string {
 func (*WorkflowNames) ProtoMessage() {}
 
 func (x *WorkflowNames) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[6]
+	mi := &file_wiggle_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -392,7 +678,7 @@ func (x *WorkflowNames) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowNames.ProtoReflect.Descriptor instead.
 func (*WorkflowNames) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{6}
+	return file_wiggle_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *WorkflowNames) GetWorkflows() []string {
@@ -413,7 +699,7 @@ type RegisterWorkflowResult struct {
 
 func (x *RegisterWorkflowResult) Reset() {
 	*x = RegisterWorkflowResult{}
-	mi := &file_wiggle_proto_msgTypes[7]
+	mi := &file_wiggle_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -425,7 +711,7 @@ func (x *RegisterWorkflowResult) String() string {
 func (*RegisterWorkflowResult) ProtoMessage() {}
 
 func (x *RegisterWorkflowResult) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[7]
+	mi := &file_wiggle_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -438,7 +724,7 @@ func (x *RegisterWorkflowResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterWorkflowResult.ProtoReflect.Descriptor instead.
 func (*RegisterWorkflowResult) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{7}
+	return file_wiggle_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *RegisterWorkflowResult) GetName() string {
@@ -463,15 +749,18 @@ func (x *RegisterWorkflowResult) GetNodes() int64 {
 }
 
 type GetWorkflowRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// Absent = the latest registered version. A worker that binds handlers for one specific version
+	// asks for that version, so its signatures are checked against the graph it will actually serve.
+	Version       *int32 `protobuf:"varint,2,opt,name=version,proto3,oneof" json:"version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetWorkflowRequest) Reset() {
 	*x = GetWorkflowRequest{}
-	mi := &file_wiggle_proto_msgTypes[8]
+	mi := &file_wiggle_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -483,7 +772,7 @@ func (x *GetWorkflowRequest) String() string {
 func (*GetWorkflowRequest) ProtoMessage() {}
 
 func (x *GetWorkflowRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[8]
+	mi := &file_wiggle_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -496,7 +785,7 @@ func (x *GetWorkflowRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetWorkflowRequest.ProtoReflect.Descriptor instead.
 func (*GetWorkflowRequest) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{8}
+	return file_wiggle_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *GetWorkflowRequest) GetName() string {
@@ -504,6 +793,280 @@ func (x *GetWorkflowRequest) GetName() string {
 		return x.Name
 	}
 	return ""
+}
+
+func (x *GetWorkflowRequest) GetVersion() int32 {
+	if x != nil && x.Version != nil {
+		return *x.Version
+	}
+	return 0
+}
+
+// One (workflow, version) a worker serves. Used to scope claims: a worker that registers handlers
+// for a specific version must not claim another version's tasks, or it would run the wrong code
+// under a name that matches.
+type WorkflowVersion struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Workflow      string                 `protobuf:"bytes,1,opt,name=workflow,proto3" json:"workflow,omitempty"`
+	Version       int32                  `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WorkflowVersion) Reset() {
+	*x = WorkflowVersion{}
+	mi := &file_wiggle_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WorkflowVersion) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WorkflowVersion) ProtoMessage() {}
+
+func (x *WorkflowVersion) ProtoReflect() protoreflect.Message {
+	mi := &file_wiggle_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WorkflowVersion.ProtoReflect.Descriptor instead.
+func (*WorkflowVersion) Descriptor() ([]byte, []int) {
+	return file_wiggle_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *WorkflowVersion) GetWorkflow() string {
+	if x != nil {
+		return x.Workflow
+	}
+	return ""
+}
+
+func (x *WorkflowVersion) GetVersion() int32 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+type BacklogCoverageRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Max           int32                  `protobuf:"varint,1,opt,name=max,proto3" json:"max,omitempty"` // 0 = a server default
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BacklogCoverageRequest) Reset() {
+	*x = BacklogCoverageRequest{}
+	mi := &file_wiggle_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BacklogCoverageRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BacklogCoverageRequest) ProtoMessage() {}
+
+func (x *BacklogCoverageRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_wiggle_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BacklogCoverageRequest.ProtoReflect.Descriptor instead.
+func (*BacklogCoverageRequest) Descriptor() ([]byte, []int) {
+	return file_wiggle_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *BacklogCoverageRequest) GetMax() int32 {
+	if x != nil {
+		return x.Max
+	}
+	return 0
+}
+
+type BacklogSlice struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Workflow          string                 `protobuf:"bytes,1,opt,name=workflow,proto3" json:"workflow,omitempty"`
+	Version           int32                  `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"`
+	Queue             string                 `protobuf:"bytes,3,opt,name=queue,proto3" json:"queue,omitempty"`
+	ReadyCount        int32                  `protobuf:"varint,4,opt,name=ready_count,json=readyCount,proto3" json:"ready_count,omitempty"`
+	OldestAvailableAt int64                  `protobuf:"varint,5,opt,name=oldest_available_at,json=oldestAvailableAt,proto3" json:"oldest_available_at,omitempty"`
+	// False = no worker polling this node serves this queue at this version, so these tokens sit
+	// dispatchable and unclaimed. True for both COVERED and CONDITIONAL.
+	Covered bool `protobuf:"varint,6,opt,name=covered,proto3" json:"covered,omitempty"`
+	// COVERED: a live worker takes every such task. CONDITIONAL: only workers whose queue criteria
+	// test properties the slice does not fix (a step, a correlation id, an attribute) poll it, so
+	// some tasks may wait for none. UNCOVERED: no live worker takes any.
+	Coverage string `protobuf:"bytes,7,opt,name=coverage,proto3" json:"coverage,omitempty"`
+	// Exactly how many of the slice's ready tasks some live worker would claim; unset for a
+	// conditional slice too large to count fully.
+	Claimable *int32 `protobuf:"varint,8,opt,name=claimable,proto3,oneof" json:"claimable,omitempty"`
+	// The criteria a conditional slice depends on, as an operator reads them.
+	Criteria      []string `protobuf:"bytes,9,rep,name=criteria,proto3" json:"criteria,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BacklogSlice) Reset() {
+	*x = BacklogSlice{}
+	mi := &file_wiggle_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BacklogSlice) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BacklogSlice) ProtoMessage() {}
+
+func (x *BacklogSlice) ProtoReflect() protoreflect.Message {
+	mi := &file_wiggle_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BacklogSlice.ProtoReflect.Descriptor instead.
+func (*BacklogSlice) Descriptor() ([]byte, []int) {
+	return file_wiggle_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *BacklogSlice) GetWorkflow() string {
+	if x != nil {
+		return x.Workflow
+	}
+	return ""
+}
+
+func (x *BacklogSlice) GetVersion() int32 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *BacklogSlice) GetQueue() string {
+	if x != nil {
+		return x.Queue
+	}
+	return ""
+}
+
+func (x *BacklogSlice) GetReadyCount() int32 {
+	if x != nil {
+		return x.ReadyCount
+	}
+	return 0
+}
+
+func (x *BacklogSlice) GetOldestAvailableAt() int64 {
+	if x != nil {
+		return x.OldestAvailableAt
+	}
+	return 0
+}
+
+func (x *BacklogSlice) GetCovered() bool {
+	if x != nil {
+		return x.Covered
+	}
+	return false
+}
+
+func (x *BacklogSlice) GetCoverage() string {
+	if x != nil {
+		return x.Coverage
+	}
+	return ""
+}
+
+func (x *BacklogSlice) GetClaimable() int32 {
+	if x != nil && x.Claimable != nil {
+		return *x.Claimable
+	}
+	return 0
+}
+
+func (x *BacklogSlice) GetCriteria() []string {
+	if x != nil {
+		return x.Criteria
+	}
+	return nil
+}
+
+type BacklogCoverage struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Slices        []*BacklogSlice        `protobuf:"bytes,1,rep,name=slices,proto3" json:"slices,omitempty"`
+	LivePollers   int32                  `protobuf:"varint,2,opt,name=live_pollers,json=livePollers,proto3" json:"live_pollers,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BacklogCoverage) Reset() {
+	*x = BacklogCoverage{}
+	mi := &file_wiggle_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BacklogCoverage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BacklogCoverage) ProtoMessage() {}
+
+func (x *BacklogCoverage) ProtoReflect() protoreflect.Message {
+	mi := &file_wiggle_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BacklogCoverage.ProtoReflect.Descriptor instead.
+func (*BacklogCoverage) Descriptor() ([]byte, []int) {
+	return file_wiggle_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *BacklogCoverage) GetSlices() []*BacklogSlice {
+	if x != nil {
+		return x.Slices
+	}
+	return nil
+}
+
+func (x *BacklogCoverage) GetLivePollers() int32 {
+	if x != nil {
+		return x.LivePollers
+	}
+	return 0
 }
 
 type StartInstanceRequest struct {
@@ -518,7 +1081,7 @@ type StartInstanceRequest struct {
 
 func (x *StartInstanceRequest) Reset() {
 	*x = StartInstanceRequest{}
-	mi := &file_wiggle_proto_msgTypes[9]
+	mi := &file_wiggle_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -530,7 +1093,7 @@ func (x *StartInstanceRequest) String() string {
 func (*StartInstanceRequest) ProtoMessage() {}
 
 func (x *StartInstanceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[9]
+	mi := &file_wiggle_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -543,7 +1106,7 @@ func (x *StartInstanceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartInstanceRequest.ProtoReflect.Descriptor instead.
 func (*StartInstanceRequest) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{9}
+	return file_wiggle_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *StartInstanceRequest) GetWorkflow() string {
@@ -584,7 +1147,7 @@ type StartInstanceResult struct {
 
 func (x *StartInstanceResult) Reset() {
 	*x = StartInstanceResult{}
-	mi := &file_wiggle_proto_msgTypes[10]
+	mi := &file_wiggle_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -596,7 +1159,7 @@ func (x *StartInstanceResult) String() string {
 func (*StartInstanceResult) ProtoMessage() {}
 
 func (x *StartInstanceResult) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[10]
+	mi := &file_wiggle_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -609,7 +1172,7 @@ func (x *StartInstanceResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartInstanceResult.ProtoReflect.Descriptor instead.
 func (*StartInstanceResult) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{10}
+	return file_wiggle_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *StartInstanceResult) GetInstanceId() string {
@@ -643,7 +1206,7 @@ type InstanceView struct {
 
 func (x *InstanceView) Reset() {
 	*x = InstanceView{}
-	mi := &file_wiggle_proto_msgTypes[11]
+	mi := &file_wiggle_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -655,7 +1218,7 @@ func (x *InstanceView) String() string {
 func (*InstanceView) ProtoMessage() {}
 
 func (x *InstanceView) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[11]
+	mi := &file_wiggle_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -668,7 +1231,7 @@ func (x *InstanceView) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InstanceView.ProtoReflect.Descriptor instead.
 func (*InstanceView) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{11}
+	return file_wiggle_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *InstanceView) GetId() string {
@@ -735,23 +1298,32 @@ func (x *InstanceView) GetUpdatedAt() int64 {
 }
 
 type Token struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	NodeId        string                 `protobuf:"bytes,2,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
-	Kind          string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`
-	Status        string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
-	Activity      string                 `protobuf:"bytes,5,opt,name=activity,proto3" json:"activity,omitempty"`
-	Attempt       int32                  `protobuf:"varint,6,opt,name=attempt,proto3" json:"attempt,omitempty"`
-	AvailableAt   int64                  `protobuf:"varint,7,opt,name=available_at,json=availableAt,proto3" json:"available_at,omitempty"`
-	LeaseOwner    *string                `protobuf:"bytes,8,opt,name=lease_owner,json=leaseOwner,proto3,oneof" json:"lease_owner,omitempty"`
-	LastError     *string                `protobuf:"bytes,9,opt,name=last_error,json=lastError,proto3,oneof" json:"last_error,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Id          string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	NodeId      string                 `protobuf:"bytes,2,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Kind        string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`
+	Status      string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+	Activity    string                 `protobuf:"bytes,5,opt,name=activity,proto3" json:"activity,omitempty"`
+	Attempt     int32                  `protobuf:"varint,6,opt,name=attempt,proto3" json:"attempt,omitempty"`
+	AvailableAt int64                  `protobuf:"varint,7,opt,name=available_at,json=availableAt,proto3" json:"available_at,omitempty"`
+	LeaseOwner  *string                `protobuf:"bytes,8,opt,name=lease_owner,json=leaseOwner,proto3,oneof" json:"lease_owner,omitempty"`
+	LastError   *string                `protobuf:"bytes,9,opt,name=last_error,json=lastError,proto3,oneof" json:"last_error,omitempty"`
+	// When the step ran on the reporting side (LOCAL_*); absent when not reported.
+	StartedAt  *int64 `protobuf:"varint,10,opt,name=started_at,json=startedAt,proto3,oneof" json:"started_at,omitempty"`
+	FinishedAt *int64 `protobuf:"varint,11,opt,name=finished_at,json=finishedAt,proto3,oneof" json:"finished_at,omitempty"`
+	// What the step ran with and returned, where the server recorded it. A task's absent output left
+	// the context unchanged; a predicate's output is its branch. Either may be a truncation marker:
+	// {"$truncated": <length>, "head": "..."}.
+	Input         *structpb.Value `protobuf:"bytes,12,opt,name=input,proto3,oneof" json:"input,omitempty"`
+	Output        *structpb.Value `protobuf:"bytes,13,opt,name=output,proto3,oneof" json:"output,omitempty"`
+	CreatedAt     int64           `protobuf:"varint,14,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Token) Reset() {
 	*x = Token{}
-	mi := &file_wiggle_proto_msgTypes[12]
+	mi := &file_wiggle_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -763,7 +1335,7 @@ func (x *Token) String() string {
 func (*Token) ProtoMessage() {}
 
 func (x *Token) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[12]
+	mi := &file_wiggle_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -776,7 +1348,7 @@ func (x *Token) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Token.ProtoReflect.Descriptor instead.
 func (*Token) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{12}
+	return file_wiggle_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *Token) GetId() string {
@@ -842,6 +1414,41 @@ func (x *Token) GetLastError() string {
 	return ""
 }
 
+func (x *Token) GetStartedAt() int64 {
+	if x != nil && x.StartedAt != nil {
+		return *x.StartedAt
+	}
+	return 0
+}
+
+func (x *Token) GetFinishedAt() int64 {
+	if x != nil && x.FinishedAt != nil {
+		return *x.FinishedAt
+	}
+	return 0
+}
+
+func (x *Token) GetInput() *structpb.Value {
+	if x != nil {
+		return x.Input
+	}
+	return nil
+}
+
+func (x *Token) GetOutput() *structpb.Value {
+	if x != nil {
+		return x.Output
+	}
+	return nil
+}
+
+func (x *Token) GetCreatedAt() int64 {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return 0
+}
+
 type InstanceDetail struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Instance      *InstanceView          `protobuf:"bytes,1,opt,name=instance,proto3" json:"instance,omitempty"`
@@ -852,7 +1459,7 @@ type InstanceDetail struct {
 
 func (x *InstanceDetail) Reset() {
 	*x = InstanceDetail{}
-	mi := &file_wiggle_proto_msgTypes[13]
+	mi := &file_wiggle_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -864,7 +1471,7 @@ func (x *InstanceDetail) String() string {
 func (*InstanceDetail) ProtoMessage() {}
 
 func (x *InstanceDetail) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[13]
+	mi := &file_wiggle_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -877,7 +1484,7 @@ func (x *InstanceDetail) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InstanceDetail.ProtoReflect.Descriptor instead.
 func (*InstanceDetail) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{13}
+	return file_wiggle_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *InstanceDetail) GetInstance() *InstanceView {
@@ -907,7 +1514,7 @@ type ListInstancesRequest struct {
 
 func (x *ListInstancesRequest) Reset() {
 	*x = ListInstancesRequest{}
-	mi := &file_wiggle_proto_msgTypes[14]
+	mi := &file_wiggle_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -919,7 +1526,7 @@ func (x *ListInstancesRequest) String() string {
 func (*ListInstancesRequest) ProtoMessage() {}
 
 func (x *ListInstancesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[14]
+	mi := &file_wiggle_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -932,7 +1539,7 @@ func (x *ListInstancesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListInstancesRequest.ProtoReflect.Descriptor instead.
 func (*ListInstancesRequest) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{14}
+	return file_wiggle_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ListInstancesRequest) GetWorkflow() string {
@@ -972,7 +1579,7 @@ type InstanceList struct {
 
 func (x *InstanceList) Reset() {
 	*x = InstanceList{}
-	mi := &file_wiggle_proto_msgTypes[15]
+	mi := &file_wiggle_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -984,7 +1591,7 @@ func (x *InstanceList) String() string {
 func (*InstanceList) ProtoMessage() {}
 
 func (x *InstanceList) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[15]
+	mi := &file_wiggle_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -997,7 +1604,7 @@ func (x *InstanceList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InstanceList.ProtoReflect.Descriptor instead.
 func (*InstanceList) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{15}
+	return file_wiggle_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *InstanceList) GetInstances() []*InstanceView {
@@ -1016,7 +1623,7 @@ type InstanceIdRequest struct {
 
 func (x *InstanceIdRequest) Reset() {
 	*x = InstanceIdRequest{}
-	mi := &file_wiggle_proto_msgTypes[16]
+	mi := &file_wiggle_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1028,7 +1635,7 @@ func (x *InstanceIdRequest) String() string {
 func (*InstanceIdRequest) ProtoMessage() {}
 
 func (x *InstanceIdRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[16]
+	mi := &file_wiggle_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1041,7 +1648,7 @@ func (x *InstanceIdRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InstanceIdRequest.ProtoReflect.Descriptor instead.
 func (*InstanceIdRequest) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{16}
+	return file_wiggle_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *InstanceIdRequest) GetInstanceId() string {
@@ -1061,7 +1668,7 @@ type CancelInstanceRequest struct {
 
 func (x *CancelInstanceRequest) Reset() {
 	*x = CancelInstanceRequest{}
-	mi := &file_wiggle_proto_msgTypes[17]
+	mi := &file_wiggle_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1073,7 +1680,7 @@ func (x *CancelInstanceRequest) String() string {
 func (*CancelInstanceRequest) ProtoMessage() {}
 
 func (x *CancelInstanceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[17]
+	mi := &file_wiggle_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1086,7 +1693,7 @@ func (x *CancelInstanceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelInstanceRequest.ProtoReflect.Descriptor instead.
 func (*CancelInstanceRequest) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{17}
+	return file_wiggle_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *CancelInstanceRequest) GetInstanceId() string {
@@ -1114,7 +1721,7 @@ type SignalRequest struct {
 
 func (x *SignalRequest) Reset() {
 	*x = SignalRequest{}
-	mi := &file_wiggle_proto_msgTypes[18]
+	mi := &file_wiggle_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1126,7 +1733,7 @@ func (x *SignalRequest) String() string {
 func (*SignalRequest) ProtoMessage() {}
 
 func (x *SignalRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[18]
+	mi := &file_wiggle_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1139,7 +1746,7 @@ func (x *SignalRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SignalRequest.ProtoReflect.Descriptor instead.
 func (*SignalRequest) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{18}
+	return file_wiggle_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *SignalRequest) GetInstanceId() string {
@@ -1178,7 +1785,7 @@ type CreateScheduleRequest struct {
 
 func (x *CreateScheduleRequest) Reset() {
 	*x = CreateScheduleRequest{}
-	mi := &file_wiggle_proto_msgTypes[19]
+	mi := &file_wiggle_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1190,7 +1797,7 @@ func (x *CreateScheduleRequest) String() string {
 func (*CreateScheduleRequest) ProtoMessage() {}
 
 func (x *CreateScheduleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[19]
+	mi := &file_wiggle_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1203,7 +1810,7 @@ func (x *CreateScheduleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateScheduleRequest.ProtoReflect.Descriptor instead.
 func (*CreateScheduleRequest) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{19}
+	return file_wiggle_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *CreateScheduleRequest) GetWorkflow() string {
@@ -1275,7 +1882,7 @@ type ScheduleView struct {
 
 func (x *ScheduleView) Reset() {
 	*x = ScheduleView{}
-	mi := &file_wiggle_proto_msgTypes[20]
+	mi := &file_wiggle_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1287,7 +1894,7 @@ func (x *ScheduleView) String() string {
 func (*ScheduleView) ProtoMessage() {}
 
 func (x *ScheduleView) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[20]
+	mi := &file_wiggle_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1300,7 +1907,7 @@ func (x *ScheduleView) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScheduleView.ProtoReflect.Descriptor instead.
 func (*ScheduleView) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{20}
+	return file_wiggle_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *ScheduleView) GetId() string {
@@ -1354,7 +1961,7 @@ type ScheduleList struct {
 
 func (x *ScheduleList) Reset() {
 	*x = ScheduleList{}
-	mi := &file_wiggle_proto_msgTypes[21]
+	mi := &file_wiggle_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1366,7 +1973,7 @@ func (x *ScheduleList) String() string {
 func (*ScheduleList) ProtoMessage() {}
 
 func (x *ScheduleList) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[21]
+	mi := &file_wiggle_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1379,7 +1986,7 @@ func (x *ScheduleList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScheduleList.ProtoReflect.Descriptor instead.
 func (*ScheduleList) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{21}
+	return file_wiggle_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *ScheduleList) GetSchedules() []*ScheduleView {
@@ -1398,7 +2005,7 @@ type ScheduleIdRequest struct {
 
 func (x *ScheduleIdRequest) Reset() {
 	*x = ScheduleIdRequest{}
-	mi := &file_wiggle_proto_msgTypes[22]
+	mi := &file_wiggle_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1410,7 +2017,7 @@ func (x *ScheduleIdRequest) String() string {
 func (*ScheduleIdRequest) ProtoMessage() {}
 
 func (x *ScheduleIdRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[22]
+	mi := &file_wiggle_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1423,7 +2030,7 @@ func (x *ScheduleIdRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScheduleIdRequest.ProtoReflect.Descriptor instead.
 func (*ScheduleIdRequest) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{22}
+	return file_wiggle_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *ScheduleIdRequest) GetId() string {
@@ -1442,7 +2049,7 @@ type CancelInstanceResult struct {
 
 func (x *CancelInstanceResult) Reset() {
 	*x = CancelInstanceResult{}
-	mi := &file_wiggle_proto_msgTypes[23]
+	mi := &file_wiggle_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1454,7 +2061,7 @@ func (x *CancelInstanceResult) String() string {
 func (*CancelInstanceResult) ProtoMessage() {}
 
 func (x *CancelInstanceResult) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[23]
+	mi := &file_wiggle_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1467,7 +2074,7 @@ func (x *CancelInstanceResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelInstanceResult.ProtoReflect.Descriptor instead.
 func (*CancelInstanceResult) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{23}
+	return file_wiggle_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *CancelInstanceResult) GetCancelled() string {
@@ -1478,19 +2085,25 @@ func (x *CancelInstanceResult) GetCancelled() string {
 }
 
 type PollRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	WorkerId      string                 `protobuf:"bytes,1,opt,name=worker_id,json=workerId,proto3" json:"worker_id,omitempty"`
-	Queues        []string               `protobuf:"bytes,2,rep,name=queues,proto3" json:"queues,omitempty"`
-	Max           int32                  `protobuf:"varint,3,opt,name=max,proto3" json:"max,omitempty"`
-	LeaseMillis   int64                  `protobuf:"varint,4,opt,name=lease_millis,json=leaseMillis,proto3" json:"lease_millis,omitempty"`
-	WaitMillis    int64                  `protobuf:"varint,5,opt,name=wait_millis,json=waitMillis,proto3" json:"wait_millis,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	WorkerId    string                 `protobuf:"bytes,1,opt,name=worker_id,json=workerId,proto3" json:"worker_id,omitempty"`
+	Queues      []string               `protobuf:"bytes,2,rep,name=queues,proto3" json:"queues,omitempty"`
+	Max         int32                  `protobuf:"varint,3,opt,name=max,proto3" json:"max,omitempty"`
+	LeaseMillis int64                  `protobuf:"varint,4,opt,name=lease_millis,json=leaseMillis,proto3" json:"lease_millis,omitempty"`
+	WaitMillis  int64                  `protobuf:"varint,5,opt,name=wait_millis,json=waitMillis,proto3" json:"wait_millis,omitempty"`
+	// Empty = serve every version, which is the default and what an unversioned worker sends.
+	// Non-empty = claim only these (workflow, version) pairs.
+	Versions []*WorkflowVersion `protobuf:"bytes,6,rep,name=versions,proto3" json:"versions,omitempty"`
+	// The alternative to `queues`: one entry per queue served, each with its own predicate. Set
+	// one or the other, never both; a queue named twice is rejected.
+	Criteria      []*QueueCriteria `protobuf:"bytes,7,rep,name=criteria,proto3" json:"criteria,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PollRequest) Reset() {
 	*x = PollRequest{}
-	mi := &file_wiggle_proto_msgTypes[24]
+	mi := &file_wiggle_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1502,7 +2115,7 @@ func (x *PollRequest) String() string {
 func (*PollRequest) ProtoMessage() {}
 
 func (x *PollRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[24]
+	mi := &file_wiggle_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1515,7 +2128,7 @@ func (x *PollRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PollRequest.ProtoReflect.Descriptor instead.
 func (*PollRequest) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{24}
+	return file_wiggle_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *PollRequest) GetWorkerId() string {
@@ -1553,6 +2166,414 @@ func (x *PollRequest) GetWaitMillis() int64 {
 	return 0
 }
 
+func (x *PollRequest) GetVersions() []*WorkflowVersion {
+	if x != nil {
+		return x.Versions
+	}
+	return nil
+}
+
+func (x *PollRequest) GetCriteria() []*QueueCriteria {
+	if x != nil {
+		return x.Criteria
+	}
+	return nil
+}
+
+// One queue a poll serves, and a predicate over the properties of its tasks. A comparison's field
+// and op are names of com.wiggle.core.criteria.Field and Op; the server rejects any other.
+type QueueCriteria struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Queue         string                 `protobuf:"bytes,1,opt,name=queue,proto3" json:"queue,omitempty"` // required
+	Where         *CriteriaPredicate     `protobuf:"bytes,2,opt,name=where,proto3" json:"where,omitempty"` // absent = every task on the queue
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *QueueCriteria) Reset() {
+	*x = QueueCriteria{}
+	mi := &file_wiggle_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QueueCriteria) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QueueCriteria) ProtoMessage() {}
+
+func (x *QueueCriteria) ProtoReflect() protoreflect.Message {
+	mi := &file_wiggle_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QueueCriteria.ProtoReflect.Descriptor instead.
+func (*QueueCriteria) Descriptor() ([]byte, []int) {
+	return file_wiggle_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *QueueCriteria) GetQueue() string {
+	if x != nil {
+		return x.Queue
+	}
+	return ""
+}
+
+func (x *QueueCriteria) GetWhere() *CriteriaPredicate {
+	if x != nil {
+		return x.Where
+	}
+	return nil
+}
+
+type CriteriaPredicate struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to P:
+	//
+	//	*CriteriaPredicate_Cmp
+	//	*CriteriaPredicate_AllOf
+	//	*CriteriaPredicate_AnyOf
+	//	*CriteriaPredicate_Negated
+	P             isCriteriaPredicate_P `protobuf_oneof:"p"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CriteriaPredicate) Reset() {
+	*x = CriteriaPredicate{}
+	mi := &file_wiggle_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CriteriaPredicate) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CriteriaPredicate) ProtoMessage() {}
+
+func (x *CriteriaPredicate) ProtoReflect() protoreflect.Message {
+	mi := &file_wiggle_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CriteriaPredicate.ProtoReflect.Descriptor instead.
+func (*CriteriaPredicate) Descriptor() ([]byte, []int) {
+	return file_wiggle_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *CriteriaPredicate) GetP() isCriteriaPredicate_P {
+	if x != nil {
+		return x.P
+	}
+	return nil
+}
+
+func (x *CriteriaPredicate) GetCmp() *CriteriaComparison {
+	if x != nil {
+		if x, ok := x.P.(*CriteriaPredicate_Cmp); ok {
+			return x.Cmp
+		}
+	}
+	return nil
+}
+
+func (x *CriteriaPredicate) GetAllOf() *CriteriaJunction {
+	if x != nil {
+		if x, ok := x.P.(*CriteriaPredicate_AllOf); ok {
+			return x.AllOf
+		}
+	}
+	return nil
+}
+
+func (x *CriteriaPredicate) GetAnyOf() *CriteriaJunction {
+	if x != nil {
+		if x, ok := x.P.(*CriteriaPredicate_AnyOf); ok {
+			return x.AnyOf
+		}
+	}
+	return nil
+}
+
+func (x *CriteriaPredicate) GetNegated() *CriteriaPredicate {
+	if x != nil {
+		if x, ok := x.P.(*CriteriaPredicate_Negated); ok {
+			return x.Negated
+		}
+	}
+	return nil
+}
+
+type isCriteriaPredicate_P interface {
+	isCriteriaPredicate_P()
+}
+
+type CriteriaPredicate_Cmp struct {
+	Cmp *CriteriaComparison `protobuf:"bytes,1,opt,name=cmp,proto3,oneof"`
+}
+
+type CriteriaPredicate_AllOf struct {
+	AllOf *CriteriaJunction `protobuf:"bytes,2,opt,name=all_of,json=allOf,proto3,oneof"`
+}
+
+type CriteriaPredicate_AnyOf struct {
+	AnyOf *CriteriaJunction `protobuf:"bytes,3,opt,name=any_of,json=anyOf,proto3,oneof"`
+}
+
+type CriteriaPredicate_Negated struct {
+	Negated *CriteriaPredicate `protobuf:"bytes,4,opt,name=negated,proto3,oneof"`
+}
+
+func (*CriteriaPredicate_Cmp) isCriteriaPredicate_P() {}
+
+func (*CriteriaPredicate_AllOf) isCriteriaPredicate_P() {}
+
+func (*CriteriaPredicate_AnyOf) isCriteriaPredicate_P() {}
+
+func (*CriteriaPredicate_Negated) isCriteriaPredicate_P() {}
+
+type CriteriaJunction struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Terms         []*CriteriaPredicate   `protobuf:"bytes,1,rep,name=terms,proto3" json:"terms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CriteriaJunction) Reset() {
+	*x = CriteriaJunction{}
+	mi := &file_wiggle_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CriteriaJunction) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CriteriaJunction) ProtoMessage() {}
+
+func (x *CriteriaJunction) ProtoReflect() protoreflect.Message {
+	mi := &file_wiggle_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CriteriaJunction.ProtoReflect.Descriptor instead.
+func (*CriteriaJunction) Descriptor() ([]byte, []int) {
+	return file_wiggle_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *CriteriaJunction) GetTerms() []*CriteriaPredicate {
+	if x != nil {
+		return x.Terms
+	}
+	return nil
+}
+
+type CriteriaComparison struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Field         string                 `protobuf:"bytes,1,opt,name=field,proto3" json:"field,omitempty"`
+	Op            string                 `protobuf:"bytes,2,opt,name=op,proto3" json:"op,omitempty"`
+	Args          []*CriteriaLiteral     `protobuf:"bytes,3,rep,name=args,proto3" json:"args,omitempty"`
+	Attribute     string                 `protobuf:"bytes,4,opt,name=attribute,proto3" json:"attribute,omitempty"` // the declared attribute's name, iff field is ATTRIBUTE
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CriteriaComparison) Reset() {
+	*x = CriteriaComparison{}
+	mi := &file_wiggle_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CriteriaComparison) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CriteriaComparison) ProtoMessage() {}
+
+func (x *CriteriaComparison) ProtoReflect() protoreflect.Message {
+	mi := &file_wiggle_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CriteriaComparison.ProtoReflect.Descriptor instead.
+func (*CriteriaComparison) Descriptor() ([]byte, []int) {
+	return file_wiggle_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *CriteriaComparison) GetField() string {
+	if x != nil {
+		return x.Field
+	}
+	return ""
+}
+
+func (x *CriteriaComparison) GetOp() string {
+	if x != nil {
+		return x.Op
+	}
+	return ""
+}
+
+func (x *CriteriaComparison) GetArgs() []*CriteriaLiteral {
+	if x != nil {
+		return x.Args
+	}
+	return nil
+}
+
+func (x *CriteriaComparison) GetAttribute() string {
+	if x != nil {
+		return x.Attribute
+	}
+	return ""
+}
+
+type CriteriaLiteral struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to V:
+	//
+	//	*CriteriaLiteral_Text
+	//	*CriteriaLiteral_Integer
+	//	*CriteriaLiteral_Decimal
+	//	*CriteriaLiteral_Flag
+	V             isCriteriaLiteral_V `protobuf_oneof:"v"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CriteriaLiteral) Reset() {
+	*x = CriteriaLiteral{}
+	mi := &file_wiggle_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CriteriaLiteral) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CriteriaLiteral) ProtoMessage() {}
+
+func (x *CriteriaLiteral) ProtoReflect() protoreflect.Message {
+	mi := &file_wiggle_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CriteriaLiteral.ProtoReflect.Descriptor instead.
+func (*CriteriaLiteral) Descriptor() ([]byte, []int) {
+	return file_wiggle_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *CriteriaLiteral) GetV() isCriteriaLiteral_V {
+	if x != nil {
+		return x.V
+	}
+	return nil
+}
+
+func (x *CriteriaLiteral) GetText() string {
+	if x != nil {
+		if x, ok := x.V.(*CriteriaLiteral_Text); ok {
+			return x.Text
+		}
+	}
+	return ""
+}
+
+func (x *CriteriaLiteral) GetInteger() int64 {
+	if x != nil {
+		if x, ok := x.V.(*CriteriaLiteral_Integer); ok {
+			return x.Integer
+		}
+	}
+	return 0
+}
+
+func (x *CriteriaLiteral) GetDecimal() string {
+	if x != nil {
+		if x, ok := x.V.(*CriteriaLiteral_Decimal); ok {
+			return x.Decimal
+		}
+	}
+	return ""
+}
+
+func (x *CriteriaLiteral) GetFlag() bool {
+	if x != nil {
+		if x, ok := x.V.(*CriteriaLiteral_Flag); ok {
+			return x.Flag
+		}
+	}
+	return false
+}
+
+type isCriteriaLiteral_V interface {
+	isCriteriaLiteral_V()
+}
+
+type CriteriaLiteral_Text struct {
+	Text string `protobuf:"bytes,1,opt,name=text,proto3,oneof"`
+}
+
+type CriteriaLiteral_Integer struct {
+	Integer int64 `protobuf:"zigzag64,2,opt,name=integer,proto3,oneof"`
+}
+
+type CriteriaLiteral_Decimal struct {
+	Decimal string `protobuf:"bytes,3,opt,name=decimal,proto3,oneof"` // exact decimal text, for an attribute
+}
+
+type CriteriaLiteral_Flag struct {
+	Flag bool `protobuf:"varint,4,opt,name=flag,proto3,oneof"` // for an attribute
+}
+
+func (*CriteriaLiteral_Text) isCriteriaLiteral_V() {}
+
+func (*CriteriaLiteral_Integer) isCriteriaLiteral_V() {}
+
+func (*CriteriaLiteral_Decimal) isCriteriaLiteral_V() {}
+
+func (*CriteriaLiteral_Flag) isCriteriaLiteral_V() {}
+
 type TaskActivation struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	TaskId         string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
@@ -1570,16 +2591,23 @@ type TaskActivation struct {
 	ExecutionMode  string                 `protobuf:"bytes,13,opt,name=execution_mode,json=executionMode,proto3" json:"execution_mode,omitempty"` // SERVER | LOCAL_SYNC | LOCAL_ASYNC (already resolved by the server)
 	// Set only for a forEach item step: `context` is then the ITEM's current value (any JSON value,
 	// scalars included), and base_context is the frozen pre-forEach context (read-only for items).
-	BaseContext   *structpb.Value `protobuf:"bytes,14,opt,name=base_context,json=baseContext,proto3" json:"base_context,omitempty"`
-	ItemIndex     int64           `protobuf:"varint,15,opt,name=item_index,json=itemIndex,proto3" json:"item_index,omitempty"`     // the item's position in the input collection
-	ItemMapKey    string          `protobuf:"bytes,16,opt,name=item_map_key,json=itemMapKey,proto3" json:"item_map_key,omitempty"` // the item's source key, when the input collection was a map
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	BaseContext *structpb.Value `protobuf:"bytes,14,opt,name=base_context,json=baseContext,proto3" json:"base_context,omitempty"`
+	ItemIndex   int64           `protobuf:"varint,15,opt,name=item_index,json=itemIndex,proto3" json:"item_index,omitempty"`     // the item's position in the input collection
+	ItemMapKey  string          `protobuf:"bytes,16,opt,name=item_map_key,json=itemMapKey,proto3" json:"item_map_key,omitempty"` // the item's source key, when the input collection was a map
+	// Set only for the combine of a forEach or of created branches: where its results are staged. A
+	// worker binds a created combine by it, since no graph it holds has the node.
+	CollectKey string `protobuf:"bytes,17,opt,name=collect_key,json=collectKey,proto3" json:"collect_key,omitempty"`
+	// Set only for a fork's combine: the arms, in fork order, that it merges.
+	ArmNames          []string `protobuf:"bytes,18,rep,name=arm_names,json=armNames,proto3" json:"arm_names,omitempty"`
+	CorrelationId     string   `protobuf:"bytes,19,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"` // the instance's; empty when it has none
+	InstanceCreatedAt int64    `protobuf:"varint,20,opt,name=instance_created_at,json=instanceCreatedAt,proto3" json:"instance_created_at,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *TaskActivation) Reset() {
 	*x = TaskActivation{}
-	mi := &file_wiggle_proto_msgTypes[25]
+	mi := &file_wiggle_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1591,7 +2619,7 @@ func (x *TaskActivation) String() string {
 func (*TaskActivation) ProtoMessage() {}
 
 func (x *TaskActivation) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[25]
+	mi := &file_wiggle_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1604,7 +2632,7 @@ func (x *TaskActivation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskActivation.ProtoReflect.Descriptor instead.
 func (*TaskActivation) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{25}
+	return file_wiggle_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *TaskActivation) GetTaskId() string {
@@ -1719,6 +2747,34 @@ func (x *TaskActivation) GetItemMapKey() string {
 	return ""
 }
 
+func (x *TaskActivation) GetCollectKey() string {
+	if x != nil {
+		return x.CollectKey
+	}
+	return ""
+}
+
+func (x *TaskActivation) GetArmNames() []string {
+	if x != nil {
+		return x.ArmNames
+	}
+	return nil
+}
+
+func (x *TaskActivation) GetCorrelationId() string {
+	if x != nil {
+		return x.CorrelationId
+	}
+	return ""
+}
+
+func (x *TaskActivation) GetInstanceCreatedAt() int64 {
+	if x != nil {
+		return x.InstanceCreatedAt
+	}
+	return 0
+}
+
 type TaskList struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Tasks []*TaskActivation      `protobuf:"bytes,1,rep,name=tasks,proto3" json:"tasks,omitempty"`
@@ -1732,7 +2788,7 @@ type TaskList struct {
 
 func (x *TaskList) Reset() {
 	*x = TaskList{}
-	mi := &file_wiggle_proto_msgTypes[26]
+	mi := &file_wiggle_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1744,7 +2800,7 @@ func (x *TaskList) String() string {
 func (*TaskList) ProtoMessage() {}
 
 func (x *TaskList) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[26]
+	mi := &file_wiggle_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1757,7 +2813,7 @@ func (x *TaskList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskList.ProtoReflect.Descriptor instead.
 func (*TaskList) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{26}
+	return file_wiggle_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *TaskList) GetTasks() []*TaskActivation {
@@ -1774,6 +2830,62 @@ func (x *TaskList) GetRetryAfterMillis() int64 {
 	return 0
 }
 
+// A domain event a handler emitted while running its step. The server appends it to the event
+// log in the transaction that settles the token, so an attempt that threw leaves none behind and
+// its retry emits fresh. instance, workflow, correlation, node and seq are filled in server-side
+// from the token; a handler supplies only these two fields.
+type EmittedEvent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Type          string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`       // handler-chosen; "wf." is reserved for lifecycle events
+	Payload       *structpb.Value        `protobuf:"bytes,2,opt,name=payload,proto3" json:"payload,omitempty"` // a JSON object
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EmittedEvent) Reset() {
+	*x = EmittedEvent{}
+	mi := &file_wiggle_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EmittedEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EmittedEvent) ProtoMessage() {}
+
+func (x *EmittedEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_wiggle_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EmittedEvent.ProtoReflect.Descriptor instead.
+func (*EmittedEvent) Descriptor() ([]byte, []int) {
+	return file_wiggle_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *EmittedEvent) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *EmittedEvent) GetPayload() *structpb.Value {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
 // One locally-executed step reported back to the server (LOCAL_SYNC/LOCAL_ASYNC).
 type StepResult struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
@@ -1782,14 +2894,19 @@ type StepResult struct {
 	//
 	//	*StepResult_Merge
 	//	*StepResult_PredicateValue
-	Outcome       isStepResult_Outcome `protobuf_oneof:"outcome"`
+	Outcome isStepResult_Outcome `protobuf_oneof:"outcome"`
+	// When the step ran, epoch millis; 0 = not reported. Kept on the token for duration stats.
+	StartedAt     int64            `protobuf:"varint,5,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	FinishedAt    int64            `protobuf:"varint,6,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
+	Events        []*EmittedEvent  `protobuf:"bytes,7,rep,name=events,proto3" json:"events,omitempty"`     // emitted while this step ran, in emission order
+	Branches      []*CreatedBranch `protobuf:"bytes,8,rep,name=branches,proto3" json:"branches,omitempty"` // created while this step ran (Step.create), in creation order
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *StepResult) Reset() {
 	*x = StepResult{}
-	mi := &file_wiggle_proto_msgTypes[27]
+	mi := &file_wiggle_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1801,7 +2918,7 @@ func (x *StepResult) String() string {
 func (*StepResult) ProtoMessage() {}
 
 func (x *StepResult) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[27]
+	mi := &file_wiggle_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1814,7 +2931,7 @@ func (x *StepResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StepResult.ProtoReflect.Descriptor instead.
 func (*StepResult) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{27}
+	return file_wiggle_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *StepResult) GetNodeId() string {
@@ -1849,12 +2966,40 @@ func (x *StepResult) GetPredicateValue() bool {
 	return false
 }
 
+func (x *StepResult) GetStartedAt() int64 {
+	if x != nil {
+		return x.StartedAt
+	}
+	return 0
+}
+
+func (x *StepResult) GetFinishedAt() int64 {
+	if x != nil {
+		return x.FinishedAt
+	}
+	return 0
+}
+
+func (x *StepResult) GetEvents() []*EmittedEvent {
+	if x != nil {
+		return x.Events
+	}
+	return nil
+}
+
+func (x *StepResult) GetBranches() []*CreatedBranch {
+	if x != nil {
+		return x.Branches
+	}
+	return nil
+}
+
 type isStepResult_Outcome interface {
 	isStepResult_Outcome()
 }
 
 type StepResult_Merge struct {
-	Merge *structpb.Value `protobuf:"bytes,2,opt,name=merge,proto3,oneof"` // TASK: shallow diff to merge into context
+	Merge *structpb.Value `protobuf:"bytes,2,opt,name=merge,proto3,oneof"` // TASK: the complete next context
 }
 
 type StepResult_PredicateValue struct {
@@ -1865,31 +3010,31 @@ func (*StepResult_Merge) isStepResult_Outcome() {}
 
 func (*StepResult_PredicateValue) isStepResult_Outcome() {}
 
-type AdvanceRunRequest struct {
+// A branch a step created at run time: its whole context, an optional key, and its chain of steps.
+type CreatedBranch struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	TaskId        string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"` // the currently-leased token being completed
-	LeaseOwner    string                 `protobuf:"bytes,2,opt,name=lease_owner,json=leaseOwner,proto3" json:"lease_owner,omitempty"`
-	Steps         []*StepResult          `protobuf:"bytes,3,rep,name=steps,proto3" json:"steps,omitempty"`  // ordered; one step for LOCAL_SYNC
-	Final         bool                   `protobuf:"varint,4,opt,name=final,proto3" json:"final,omitempty"` // true = worker reached a boundary and is handing back
+	Input         *structpb.Value        `protobuf:"bytes,1,opt,name=input,proto3" json:"input,omitempty"`
+	Key           string                 `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`     // optional; all-or-none across one report
+	Steps         []*BranchStep          `protobuf:"bytes,3,rep,name=steps,proto3" json:"steps,omitempty"` // at least one
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *AdvanceRunRequest) Reset() {
-	*x = AdvanceRunRequest{}
-	mi := &file_wiggle_proto_msgTypes[28]
+func (x *CreatedBranch) Reset() {
+	*x = CreatedBranch{}
+	mi := &file_wiggle_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *AdvanceRunRequest) String() string {
+func (x *CreatedBranch) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*AdvanceRunRequest) ProtoMessage() {}
+func (*CreatedBranch) ProtoMessage() {}
 
-func (x *AdvanceRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[28]
+func (x *CreatedBranch) ProtoReflect() protoreflect.Message {
+	mi := &file_wiggle_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1900,123 +3045,68 @@ func (x *AdvanceRunRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use AdvanceRunRequest.ProtoReflect.Descriptor instead.
-func (*AdvanceRunRequest) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{28}
+// Deprecated: Use CreatedBranch.ProtoReflect.Descriptor instead.
+func (*CreatedBranch) Descriptor() ([]byte, []int) {
+	return file_wiggle_proto_rawDescGZIP(), []int{41}
 }
 
-func (x *AdvanceRunRequest) GetTaskId() string {
+func (x *CreatedBranch) GetInput() *structpb.Value {
 	if x != nil {
-		return x.TaskId
+		return x.Input
+	}
+	return nil
+}
+
+func (x *CreatedBranch) GetKey() string {
+	if x != nil {
+		return x.Key
 	}
 	return ""
 }
 
-func (x *AdvanceRunRequest) GetLeaseOwner() string {
-	if x != nil {
-		return x.LeaseOwner
-	}
-	return ""
-}
-
-func (x *AdvanceRunRequest) GetSteps() []*StepResult {
+func (x *CreatedBranch) GetSteps() []*BranchStep {
 	if x != nil {
 		return x.Steps
 	}
 	return nil
 }
 
-func (x *AdvanceRunRequest) GetFinal() bool {
-	if x != nil {
-		return x.Final
-	}
-	return false
-}
-
-type AdvanceRunResult struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	InstanceStatus string                 `protobuf:"bytes,1,opt,name=instance_status,json=instanceStatus,proto3" json:"instance_status,omitempty"`    // RUNNING | COMPLETED | FAILED | CANCELLED
-	LeaseExpiresAt int64                  `protobuf:"varint,2,opt,name=lease_expires_at,json=leaseExpiresAt,proto3" json:"lease_expires_at,omitempty"` // renewed lease covering continued local execution
-	NextTaskId     string                 `protobuf:"bytes,3,opt,name=next_task_id,json=nextTaskId,proto3" json:"next_task_id,omitempty"`              // token to reference for the next local step (blank if handed back)
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
-}
-
-func (x *AdvanceRunResult) Reset() {
-	*x = AdvanceRunResult{}
-	mi := &file_wiggle_proto_msgTypes[29]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *AdvanceRunResult) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*AdvanceRunResult) ProtoMessage() {}
-
-func (x *AdvanceRunResult) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[29]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use AdvanceRunResult.ProtoReflect.Descriptor instead.
-func (*AdvanceRunResult) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{29}
-}
-
-func (x *AdvanceRunResult) GetInstanceStatus() string {
-	if x != nil {
-		return x.InstanceStatus
-	}
-	return ""
-}
-
-func (x *AdvanceRunResult) GetLeaseExpiresAt() int64 {
-	if x != nil {
-		return x.LeaseExpiresAt
-	}
-	return 0
-}
-
-func (x *AdvanceRunResult) GetNextTaskId() string {
-	if x != nil {
-		return x.NextTaskId
-	}
-	return ""
-}
-
-type TaskResultRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TaskId        string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
-	LeaseOwner    string                 `protobuf:"bytes,2,opt,name=lease_owner,json=leaseOwner,proto3" json:"lease_owner,omitempty"`
-	Result        *structpb.Value        `protobuf:"bytes,3,opt,name=result,proto3" json:"result,omitempty"`
+type BranchStep struct {
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Name        string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"` // the step name, signal name or sub-flow node name; blank for a sleep or fork
+	Kind        string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"` // TASK | PREDICATE | SLEEP | SIGNAL | SUB_WORKFLOW | FORK
+	Compensable bool                   `protobuf:"varint,3,opt,name=compensable,proto3" json:"compensable,omitempty"`
+	Queue       string                 `protobuf:"bytes,4,opt,name=queue,proto3" json:"queue,omitempty"` // blank = the creating step's queue
+	Retry       *structpb.Value        `protobuf:"bytes,5,opt,name=retry,proto3" json:"retry,omitempty"` // a retry policy as JSON; absent = the creating step's
+	SleepMillis int64                  `protobuf:"varint,6,opt,name=sleep_millis,json=sleepMillis,proto3" json:"sleep_millis,omitempty"`
+	Combine     string                 `protobuf:"bytes,7,opt,name=combine,proto3" json:"combine,omitempty"`       // a TASK: creates branches, collected by this combine; a FORK: merges its arms
+	Workflow    string                 `protobuf:"bytes,8,opt,name=workflow,proto3" json:"workflow,omitempty"`     // SUB_WORKFLOW: the child workflow
+	Escalation  []*BranchStep          `protobuf:"bytes,9,rep,name=escalation,proto3" json:"escalation,omitempty"` // SIGNAL: run when the deadline in sleep_millis passes
+	Arms        []*BranchArm           `protobuf:"bytes,10,rep,name=arms,proto3" json:"arms,omitempty"`            // FORK: each arm runs on its own copy of the context
+	// A PREDICATE with a body is a loop: the body runs, then again while the condition `name` holds.
+	Body       []*BranchStep `protobuf:"bytes,11,rep,name=body,proto3" json:"body,omitempty"`
+	LoopBudget int32         `protobuf:"varint,12,opt,name=loop_budget,json=loopBudget,proto3" json:"loop_budget,omitempty"` // a loop's most iterations; 0 = the engine's default
+	// A PREDICATE with cases is a choice: the first case whose guard holds runs its steps.
+	Cases         []*BranchCase `protobuf:"bytes,13,rep,name=cases,proto3" json:"cases,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *TaskResultRequest) Reset() {
-	*x = TaskResultRequest{}
-	mi := &file_wiggle_proto_msgTypes[30]
+func (x *BranchStep) Reset() {
+	*x = BranchStep{}
+	mi := &file_wiggle_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *TaskResultRequest) String() string {
+func (x *BranchStep) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*TaskResultRequest) ProtoMessage() {}
+func (*BranchStep) ProtoMessage() {}
 
-func (x *TaskResultRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[30]
+func (x *BranchStep) ProtoReflect() protoreflect.Message {
+	mi := &file_wiggle_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2027,28 +3117,740 @@ func (x *TaskResultRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use TaskResultRequest.ProtoReflect.Descriptor instead.
-func (*TaskResultRequest) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{30}
+// Deprecated: Use BranchStep.ProtoReflect.Descriptor instead.
+func (*BranchStep) Descriptor() ([]byte, []int) {
+	return file_wiggle_proto_rawDescGZIP(), []int{42}
 }
 
-func (x *TaskResultRequest) GetTaskId() string {
+func (x *BranchStep) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *BranchStep) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *BranchStep) GetCompensable() bool {
+	if x != nil {
+		return x.Compensable
+	}
+	return false
+}
+
+func (x *BranchStep) GetQueue() string {
+	if x != nil {
+		return x.Queue
+	}
+	return ""
+}
+
+func (x *BranchStep) GetRetry() *structpb.Value {
+	if x != nil {
+		return x.Retry
+	}
+	return nil
+}
+
+func (x *BranchStep) GetSleepMillis() int64 {
+	if x != nil {
+		return x.SleepMillis
+	}
+	return 0
+}
+
+func (x *BranchStep) GetCombine() string {
+	if x != nil {
+		return x.Combine
+	}
+	return ""
+}
+
+func (x *BranchStep) GetWorkflow() string {
+	if x != nil {
+		return x.Workflow
+	}
+	return ""
+}
+
+func (x *BranchStep) GetEscalation() []*BranchStep {
+	if x != nil {
+		return x.Escalation
+	}
+	return nil
+}
+
+func (x *BranchStep) GetArms() []*BranchArm {
+	if x != nil {
+		return x.Arms
+	}
+	return nil
+}
+
+func (x *BranchStep) GetBody() []*BranchStep {
+	if x != nil {
+		return x.Body
+	}
+	return nil
+}
+
+func (x *BranchStep) GetLoopBudget() int32 {
+	if x != nil {
+		return x.LoopBudget
+	}
+	return 0
+}
+
+func (x *BranchStep) GetCases() []*BranchCase {
+	if x != nil {
+		return x.Cases
+	}
+	return nil
+}
+
+type BranchCase struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Guard         string                 `protobuf:"bytes,1,opt,name=guard,proto3" json:"guard,omitempty"` // blank: the otherwise, which must come last
+	Steps         []*BranchStep          `protobuf:"bytes,2,rep,name=steps,proto3" json:"steps,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BranchCase) Reset() {
+	*x = BranchCase{}
+	mi := &file_wiggle_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BranchCase) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BranchCase) ProtoMessage() {}
+
+func (x *BranchCase) ProtoReflect() protoreflect.Message {
+	mi := &file_wiggle_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BranchCase.ProtoReflect.Descriptor instead.
+func (*BranchCase) Descriptor() ([]byte, []int) {
+	return file_wiggle_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *BranchCase) GetGuard() string {
+	if x != nil {
+		return x.Guard
+	}
+	return ""
+}
+
+func (x *BranchCase) GetSteps() []*BranchStep {
+	if x != nil {
+		return x.Steps
+	}
+	return nil
+}
+
+type BranchArm struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Steps         []*BranchStep          `protobuf:"bytes,1,rep,name=steps,proto3" json:"steps,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BranchArm) Reset() {
+	*x = BranchArm{}
+	mi := &file_wiggle_proto_msgTypes[44]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BranchArm) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BranchArm) ProtoMessage() {}
+
+func (x *BranchArm) ProtoReflect() protoreflect.Message {
+	mi := &file_wiggle_proto_msgTypes[44]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BranchArm.ProtoReflect.Descriptor instead.
+func (*BranchArm) Descriptor() ([]byte, []int) {
+	return file_wiggle_proto_rawDescGZIP(), []int{44}
+}
+
+func (x *BranchArm) GetSteps() []*BranchStep {
+	if x != nil {
+		return x.Steps
+	}
+	return nil
+}
+
+// One instance's worth of a report: the ordered steps one worker ran from one leased token.
+type ReportedRun struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	TaskId     string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"` // the currently-leased token these steps start at
+	LeaseOwner string                 `protobuf:"bytes,2,opt,name=lease_owner,json=leaseOwner,proto3" json:"lease_owner,omitempty"`
+	Steps      []*StepResult          `protobuf:"bytes,3,rep,name=steps,proto3" json:"steps,omitempty"` // ordered, at least one; one step is the ordinary case
+	// The worker will not take a continuation: it reached a boundary, filled its batch, or is
+	// draining. A statement about this worker, not about the workflow -- a mode that never chains
+	// hands back regardless.
+	Final bool `protobuf:"varint,4,opt,name=final,proto3" json:"final,omitempty"`
+	// The criteria the worker polled with. The server leases a continuation back only when the
+	// entry for its queue matches it, so a chain cannot run a step the worker's poll would not
+	// have claimed.
+	Criteria      []*QueueCriteria `protobuf:"bytes,5,rep,name=criteria,proto3" json:"criteria,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReportedRun) Reset() {
+	*x = ReportedRun{}
+	mi := &file_wiggle_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReportedRun) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReportedRun) ProtoMessage() {}
+
+func (x *ReportedRun) ProtoReflect() protoreflect.Message {
+	mi := &file_wiggle_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReportedRun.ProtoReflect.Descriptor instead.
+func (*ReportedRun) Descriptor() ([]byte, []int) {
+	return file_wiggle_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *ReportedRun) GetTaskId() string {
 	if x != nil {
 		return x.TaskId
 	}
 	return ""
 }
 
-func (x *TaskResultRequest) GetLeaseOwner() string {
+func (x *ReportedRun) GetLeaseOwner() string {
 	if x != nil {
 		return x.LeaseOwner
 	}
 	return ""
 }
 
-func (x *TaskResultRequest) GetResult() *structpb.Value {
+func (x *ReportedRun) GetSteps() []*StepResult {
 	if x != nil {
-		return x.Result
+		return x.Steps
+	}
+	return nil
+}
+
+func (x *ReportedRun) GetFinal() bool {
+	if x != nil {
+		return x.Final
+	}
+	return false
+}
+
+func (x *ReportedRun) GetCriteria() []*QueueCriteria {
+	if x != nil {
+		return x.Criteria
+	}
+	return nil
+}
+
+// One run, or several across different instances. Several are admitted only where batching is
+// sound (LOCAL_ASYNC, one run per instance, no sub-workflow) and commit together; a run the batch
+// will not take is refused on its own and may be reported again in a call of its own. A single
+// run carries no batching restrictions -- there is nothing to batch it with.
+type ReportStepsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Runs          []*ReportedRun         `protobuf:"bytes,1,rep,name=runs,proto3" json:"runs,omitempty"` // at least one, each naming a different instance
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReportStepsRequest) Reset() {
+	*x = ReportStepsRequest{}
+	mi := &file_wiggle_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReportStepsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReportStepsRequest) ProtoMessage() {}
+
+func (x *ReportStepsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_wiggle_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReportStepsRequest.ProtoReflect.Descriptor instead.
+func (*ReportStepsRequest) Descriptor() ([]byte, []int) {
+	return file_wiggle_proto_rawDescGZIP(), []int{46}
+}
+
+func (x *ReportStepsRequest) GetRuns() []*ReportedRun {
+	if x != nil {
+		return x.Runs
+	}
+	return nil
+}
+
+type RunApplied struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Any InstanceStatus, not just the terminal four: a concurrent failure can leave the
+	// instance COMPENSATING between a worker's local steps. Clients treat anything but
+	// RUNNING as "stop here". See docs/state-machines.md.
+	InstanceStatus string `protobuf:"bytes,1,opt,name=instance_status,json=instanceStatus,proto3" json:"instance_status,omitempty"` // RUNNING | COMPLETED | FAILED | CANCELLED
+	// | COMPENSATING | COMPENSATED | COMPENSATION_FAILED
+	LeaseExpiresAt int64  `protobuf:"varint,2,opt,name=lease_expires_at,json=leaseExpiresAt,proto3" json:"lease_expires_at,omitempty"` // renewed lease covering continued local execution
+	NextTaskId     string `protobuf:"bytes,3,opt,name=next_task_id,json=nextTaskId,proto3" json:"next_task_id,omitempty"`              // token to reference for the next local step (blank if handed back)
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *RunApplied) Reset() {
+	*x = RunApplied{}
+	mi := &file_wiggle_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunApplied) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunApplied) ProtoMessage() {}
+
+func (x *RunApplied) ProtoReflect() protoreflect.Message {
+	mi := &file_wiggle_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunApplied.ProtoReflect.Descriptor instead.
+func (*RunApplied) Descriptor() ([]byte, []int) {
+	return file_wiggle_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *RunApplied) GetInstanceStatus() string {
+	if x != nil {
+		return x.InstanceStatus
+	}
+	return ""
+}
+
+func (x *RunApplied) GetLeaseExpiresAt() int64 {
+	if x != nil {
+		return x.LeaseExpiresAt
+	}
+	return 0
+}
+
+func (x *RunApplied) GetNextTaskId() string {
+	if x != nil {
+		return x.NextTaskId
+	}
+	return ""
+}
+
+// A run's fate. A refused run wrote nothing and may be reported again; error_status carries the
+// status the call would have raised, so a client reporting a lone run can raise it as before.
+type RunOutcome struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TaskId        string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	Applied       *RunApplied            `protobuf:"bytes,2,opt,name=applied,proto3" json:"applied,omitempty"`                             // set when the run applied (error_status == 0)
+	ErrorStatus   int32                  `protobuf:"varint,3,opt,name=error_status,json=errorStatus,proto3" json:"error_status,omitempty"` // 0 ok; else the status this run would have thrown
+	Error         string                 `protobuf:"bytes,4,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunOutcome) Reset() {
+	*x = RunOutcome{}
+	mi := &file_wiggle_proto_msgTypes[48]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunOutcome) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunOutcome) ProtoMessage() {}
+
+func (x *RunOutcome) ProtoReflect() protoreflect.Message {
+	mi := &file_wiggle_proto_msgTypes[48]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunOutcome.ProtoReflect.Descriptor instead.
+func (*RunOutcome) Descriptor() ([]byte, []int) {
+	return file_wiggle_proto_rawDescGZIP(), []int{48}
+}
+
+func (x *RunOutcome) GetTaskId() string {
+	if x != nil {
+		return x.TaskId
+	}
+	return ""
+}
+
+func (x *RunOutcome) GetApplied() *RunApplied {
+	if x != nil {
+		return x.Applied
+	}
+	return nil
+}
+
+func (x *RunOutcome) GetErrorStatus() int32 {
+	if x != nil {
+		return x.ErrorStatus
+	}
+	return 0
+}
+
+func (x *RunOutcome) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+type ReportStepsResult struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Results       []*RunOutcome          `protobuf:"bytes,1,rep,name=results,proto3" json:"results,omitempty"` // one per submitted run, in submission order
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReportStepsResult) Reset() {
+	*x = ReportStepsResult{}
+	mi := &file_wiggle_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReportStepsResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReportStepsResult) ProtoMessage() {}
+
+func (x *ReportStepsResult) ProtoReflect() protoreflect.Message {
+	mi := &file_wiggle_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReportStepsResult.ProtoReflect.Descriptor instead.
+func (*ReportStepsResult) Descriptor() ([]byte, []int) {
+	return file_wiggle_proto_rawDescGZIP(), []int{49}
+}
+
+func (x *ReportStepsResult) GetResults() []*RunOutcome {
+	if x != nil {
+		return x.Results
+	}
+	return nil
+}
+
+type StepStatsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Workflow      string                 `protobuf:"bytes,1,opt,name=workflow,proto3" json:"workflow,omitempty"`
+	Version       int32                  `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"` // 0 = the latest registered version
+	Since         int64                  `protobuf:"varint,3,opt,name=since,proto3" json:"since,omitempty"`     // epoch millis; 0 = no lower bound
+	Sample        int32                  `protobuf:"varint,4,opt,name=sample,proto3" json:"sample,omitempty"`   // newest settled steps considered; 0 = a server default
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StepStatsRequest) Reset() {
+	*x = StepStatsRequest{}
+	mi := &file_wiggle_proto_msgTypes[50]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StepStatsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StepStatsRequest) ProtoMessage() {}
+
+func (x *StepStatsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_wiggle_proto_msgTypes[50]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StepStatsRequest.ProtoReflect.Descriptor instead.
+func (*StepStatsRequest) Descriptor() ([]byte, []int) {
+	return file_wiggle_proto_rawDescGZIP(), []int{50}
+}
+
+func (x *StepStatsRequest) GetWorkflow() string {
+	if x != nil {
+		return x.Workflow
+	}
+	return ""
+}
+
+func (x *StepStatsRequest) GetVersion() int32 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *StepStatsRequest) GetSince() int64 {
+	if x != nil {
+		return x.Since
+	}
+	return 0
+}
+
+func (x *StepStatsRequest) GetSample() int32 {
+	if x != nil {
+		return x.Sample
+	}
+	return 0
+}
+
+type NodeStats struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	NodeId     string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Name       string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Count      int64                  `protobuf:"varint,3,opt,name=count,proto3" json:"count,omitempty"`
+	MeanMillis float64                `protobuf:"fixed64,4,opt,name=mean_millis,json=meanMillis,proto3" json:"mean_millis,omitempty"`
+	P50Millis  int64                  `protobuf:"varint,5,opt,name=p50_millis,json=p50Millis,proto3" json:"p50_millis,omitempty"`
+	P95Millis  int64                  `protobuf:"varint,6,opt,name=p95_millis,json=p95Millis,proto3" json:"p95_millis,omitempty"`
+	MaxMillis  int64                  `protobuf:"varint,7,opt,name=max_millis,json=maxMillis,proto3" json:"max_millis,omitempty"`
+	// How long the step waited to be claimed by a worker (ready -> claimed).
+	WaitP50Millis int64 `protobuf:"varint,8,opt,name=wait_p50_millis,json=waitP50Millis,proto3" json:"wait_p50_millis,omitempty"`
+	WaitP95Millis int64 `protobuf:"varint,9,opt,name=wait_p95_millis,json=waitP95Millis,proto3" json:"wait_p95_millis,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NodeStats) Reset() {
+	*x = NodeStats{}
+	mi := &file_wiggle_proto_msgTypes[51]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NodeStats) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NodeStats) ProtoMessage() {}
+
+func (x *NodeStats) ProtoReflect() protoreflect.Message {
+	mi := &file_wiggle_proto_msgTypes[51]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NodeStats.ProtoReflect.Descriptor instead.
+func (*NodeStats) Descriptor() ([]byte, []int) {
+	return file_wiggle_proto_rawDescGZIP(), []int{51}
+}
+
+func (x *NodeStats) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *NodeStats) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *NodeStats) GetCount() int64 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+func (x *NodeStats) GetMeanMillis() float64 {
+	if x != nil {
+		return x.MeanMillis
+	}
+	return 0
+}
+
+func (x *NodeStats) GetP50Millis() int64 {
+	if x != nil {
+		return x.P50Millis
+	}
+	return 0
+}
+
+func (x *NodeStats) GetP95Millis() int64 {
+	if x != nil {
+		return x.P95Millis
+	}
+	return 0
+}
+
+func (x *NodeStats) GetMaxMillis() int64 {
+	if x != nil {
+		return x.MaxMillis
+	}
+	return 0
+}
+
+func (x *NodeStats) GetWaitP50Millis() int64 {
+	if x != nil {
+		return x.WaitP50Millis
+	}
+	return 0
+}
+
+func (x *NodeStats) GetWaitP95Millis() int64 {
+	if x != nil {
+		return x.WaitP95Millis
+	}
+	return 0
+}
+
+type StepStats struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Workflow      string                 `protobuf:"bytes,1,opt,name=workflow,proto3" json:"workflow,omitempty"`
+	Version       int32                  `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"`
+	Nodes         []*NodeStats           `protobuf:"bytes,3,rep,name=nodes,proto3" json:"nodes,omitempty"` // graph order is not implied; sort by p95 for a bottleneck view
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StepStats) Reset() {
+	*x = StepStats{}
+	mi := &file_wiggle_proto_msgTypes[52]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StepStats) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StepStats) ProtoMessage() {}
+
+func (x *StepStats) ProtoReflect() protoreflect.Message {
+	mi := &file_wiggle_proto_msgTypes[52]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StepStats.ProtoReflect.Descriptor instead.
+func (*StepStats) Descriptor() ([]byte, []int) {
+	return file_wiggle_proto_rawDescGZIP(), []int{52}
+}
+
+func (x *StepStats) GetWorkflow() string {
+	if x != nil {
+		return x.Workflow
+	}
+	return ""
+}
+
+func (x *StepStats) GetVersion() int32 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *StepStats) GetNodes() []*NodeStats {
+	if x != nil {
+		return x.Nodes
 	}
 	return nil
 }
@@ -2065,7 +3867,7 @@ type TaskFailureRequest struct {
 
 func (x *TaskFailureRequest) Reset() {
 	*x = TaskFailureRequest{}
-	mi := &file_wiggle_proto_msgTypes[31]
+	mi := &file_wiggle_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2077,7 +3879,7 @@ func (x *TaskFailureRequest) String() string {
 func (*TaskFailureRequest) ProtoMessage() {}
 
 func (x *TaskFailureRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[31]
+	mi := &file_wiggle_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2090,7 +3892,7 @@ func (x *TaskFailureRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskFailureRequest.ProtoReflect.Descriptor instead.
 func (*TaskFailureRequest) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{31}
+	return file_wiggle_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *TaskFailureRequest) GetTaskId() string {
@@ -2132,7 +3934,7 @@ type HeartbeatRequest struct {
 
 func (x *HeartbeatRequest) Reset() {
 	*x = HeartbeatRequest{}
-	mi := &file_wiggle_proto_msgTypes[32]
+	mi := &file_wiggle_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2144,7 +3946,7 @@ func (x *HeartbeatRequest) String() string {
 func (*HeartbeatRequest) ProtoMessage() {}
 
 func (x *HeartbeatRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[32]
+	mi := &file_wiggle_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2157,7 +3959,7 @@ func (x *HeartbeatRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeartbeatRequest.ProtoReflect.Descriptor instead.
 func (*HeartbeatRequest) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{32}
+	return file_wiggle_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *HeartbeatRequest) GetTaskId() string {
@@ -2190,7 +3992,7 @@ type HeartbeatResult struct {
 
 func (x *HeartbeatResult) Reset() {
 	*x = HeartbeatResult{}
-	mi := &file_wiggle_proto_msgTypes[33]
+	mi := &file_wiggle_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2202,7 +4004,7 @@ func (x *HeartbeatResult) String() string {
 func (*HeartbeatResult) ProtoMessage() {}
 
 func (x *HeartbeatResult) ProtoReflect() protoreflect.Message {
-	mi := &file_wiggle_proto_msgTypes[33]
+	mi := &file_wiggle_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2215,7 +4017,7 @@ func (x *HeartbeatResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeartbeatResult.ProtoReflect.Descriptor instead.
 func (*HeartbeatResult) Descriptor() ([]byte, []int) {
-	return file_wiggle_proto_rawDescGZIP(), []int{33}
+	return file_wiggle_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *HeartbeatResult) GetLeaseExpiresAt() int64 {
@@ -2225,11 +4027,355 @@ func (x *HeartbeatResult) GetLeaseExpiresAt() int64 {
 	return 0
 }
 
+type PollEventsRequest struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Consumer   string                 `protobuf:"bytes,1,opt,name=consumer,proto3" json:"consumer,omitempty"` // named cursor; the first poll registers it
+	Max        int32                  `protobuf:"varint,2,opt,name=max,proto3" json:"max,omitempty"`
+	WaitMillis int64                  `protobuf:"varint,3,opt,name=wait_millis,json=waitMillis,proto3" json:"wait_millis,omitempty"` // long-poll, clamped like PollTasks
+	// Start position when the first poll creates the cursor; ignored once it exists.
+	// 0 = tail (only events appended from now on), -1 = earliest retained, else a seq.
+	StartFrom     int64 `protobuf:"varint,4,opt,name=start_from,json=startFrom,proto3" json:"start_from,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PollEventsRequest) Reset() {
+	*x = PollEventsRequest{}
+	mi := &file_wiggle_proto_msgTypes[56]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PollEventsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PollEventsRequest) ProtoMessage() {}
+
+func (x *PollEventsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_wiggle_proto_msgTypes[56]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PollEventsRequest.ProtoReflect.Descriptor instead.
+func (*PollEventsRequest) Descriptor() ([]byte, []int) {
+	return file_wiggle_proto_rawDescGZIP(), []int{56}
+}
+
+func (x *PollEventsRequest) GetConsumer() string {
+	if x != nil {
+		return x.Consumer
+	}
+	return ""
+}
+
+func (x *PollEventsRequest) GetMax() int32 {
+	if x != nil {
+		return x.Max
+	}
+	return 0
+}
+
+func (x *PollEventsRequest) GetWaitMillis() int64 {
+	if x != nil {
+		return x.WaitMillis
+	}
+	return 0
+}
+
+func (x *PollEventsRequest) GetStartFrom() int64 {
+	if x != nil {
+		return x.StartFrom
+	}
+	return 0
+}
+
+// One entry of the event log: an instance lifecycle transition, written in the transaction
+// that made it. type is wf.started | wf.completed | wf.failed | wf.cancelled | wf.compensating
+// | wf.compensated | wf.compensation_failed; the wf. prefix is reserved for the engine.
+type EventView struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Seq           int64                  `protobuf:"varint,1,opt,name=seq,proto3" json:"seq,omitempty"` // strictly increasing within one shard's log; gaps are possible
+	InstanceId    string                 `protobuf:"bytes,2,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
+	Workflow      string                 `protobuf:"bytes,3,opt,name=workflow,proto3" json:"workflow,omitempty"`
+	Version       int32                  `protobuf:"varint,4,opt,name=version,proto3" json:"version,omitempty"`
+	CorrelationId string                 `protobuf:"bytes,5,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"`
+	Type          string                 `protobuf:"bytes,6,opt,name=type,proto3" json:"type,omitempty"`
+	CreatedAt     int64                  `protobuf:"varint,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	Payload       *structpb.Value        `protobuf:"bytes,8,opt,name=payload,proto3" json:"payload,omitempty"`
+	NodeId        string                 `protobuf:"bytes,9,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"` // the step that emitted it; empty for a lifecycle entry
+	Shard         int32                  `protobuf:"varint,10,opt,name=shard,proto3" json:"shard,omitempty"`               // the shard whose log holds it; (shard, seq) identifies it
+	Cursor        string                 `protobuf:"bytes,11,opt,name=cursor,proto3" json:"cursor,omitempty"`              // opaque: the consumer's place just after this entry, for AckEvents
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EventView) Reset() {
+	*x = EventView{}
+	mi := &file_wiggle_proto_msgTypes[57]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EventView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EventView) ProtoMessage() {}
+
+func (x *EventView) ProtoReflect() protoreflect.Message {
+	mi := &file_wiggle_proto_msgTypes[57]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EventView.ProtoReflect.Descriptor instead.
+func (*EventView) Descriptor() ([]byte, []int) {
+	return file_wiggle_proto_rawDescGZIP(), []int{57}
+}
+
+func (x *EventView) GetSeq() int64 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
+func (x *EventView) GetInstanceId() string {
+	if x != nil {
+		return x.InstanceId
+	}
+	return ""
+}
+
+func (x *EventView) GetWorkflow() string {
+	if x != nil {
+		return x.Workflow
+	}
+	return ""
+}
+
+func (x *EventView) GetVersion() int32 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *EventView) GetCorrelationId() string {
+	if x != nil {
+		return x.CorrelationId
+	}
+	return ""
+}
+
+func (x *EventView) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *EventView) GetCreatedAt() int64 {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return 0
+}
+
+func (x *EventView) GetPayload() *structpb.Value {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
+func (x *EventView) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *EventView) GetShard() int32 {
+	if x != nil {
+		return x.Shard
+	}
+	return 0
+}
+
+func (x *EventView) GetCursor() string {
+	if x != nil {
+		return x.Cursor
+	}
+	return ""
+}
+
+type EventList struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Events []*EventView           `protobuf:"bytes,1,rep,name=events,proto3" json:"events,omitempty"`
+	// Same backpressure hint as TaskList: when > 0, hold off this many millis before polling again.
+	RetryAfterMillis int64 `protobuf:"varint,2,opt,name=retry_after_millis,json=retryAfterMillis,proto3" json:"retry_after_millis,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *EventList) Reset() {
+	*x = EventList{}
+	mi := &file_wiggle_proto_msgTypes[58]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EventList) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EventList) ProtoMessage() {}
+
+func (x *EventList) ProtoReflect() protoreflect.Message {
+	mi := &file_wiggle_proto_msgTypes[58]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EventList.ProtoReflect.Descriptor instead.
+func (*EventList) Descriptor() ([]byte, []int) {
+	return file_wiggle_proto_rawDescGZIP(), []int{58}
+}
+
+func (x *EventList) GetEvents() []*EventView {
+	if x != nil {
+		return x.Events
+	}
+	return nil
+}
+
+func (x *EventList) GetRetryAfterMillis() int64 {
+	if x != nil {
+		return x.RetryAfterMillis
+	}
+	return 0
+}
+
+type AckEventsRequest struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Consumer string                 `protobuf:"bytes,1,opt,name=consumer,proto3" json:"consumer,omitempty"`
+	// Cumulative: acknowledges every event with seq <= this. Only for a log on one shard; a sharded
+	// log refuses it as INVALID_ARGUMENT.
+	AckedSeq int64 `protobuf:"varint,2,opt,name=acked_seq,json=ackedSeq,proto3" json:"acked_seq,omitempty"`
+	// Cumulative: the cursor of the last event handled, acknowledging it and everything before it.
+	// Takes precedence over acked_seq when set.
+	AckedCursor   string `protobuf:"bytes,3,opt,name=acked_cursor,json=ackedCursor,proto3" json:"acked_cursor,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AckEventsRequest) Reset() {
+	*x = AckEventsRequest{}
+	mi := &file_wiggle_proto_msgTypes[59]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AckEventsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AckEventsRequest) ProtoMessage() {}
+
+func (x *AckEventsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_wiggle_proto_msgTypes[59]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AckEventsRequest.ProtoReflect.Descriptor instead.
+func (*AckEventsRequest) Descriptor() ([]byte, []int) {
+	return file_wiggle_proto_rawDescGZIP(), []int{59}
+}
+
+func (x *AckEventsRequest) GetConsumer() string {
+	if x != nil {
+		return x.Consumer
+	}
+	return ""
+}
+
+func (x *AckEventsRequest) GetAckedSeq() int64 {
+	if x != nil {
+		return x.AckedSeq
+	}
+	return 0
+}
+
+func (x *AckEventsRequest) GetAckedCursor() string {
+	if x != nil {
+		return x.AckedCursor
+	}
+	return ""
+}
+
 var File_wiggle_proto protoreflect.FileDescriptor
 
 const file_wiggle_proto_rawDesc = "" +
 	"\n" +
-	"\fwiggle.proto\x12\x10com.wiggle.proto\x1a\x1cgoogle/protobuf/struct.proto\"\a\n" +
+	"\fwiggle.proto\x12\x10com.wiggle.proto\x1a\x1cgoogle/protobuf/struct.proto\"\x8c\x02\n" +
+	"\rSearchRequest\x12\x12\n" +
+	"\x04text\x18\x01 \x01(\tR\x04text\x12\x1f\n" +
+	"\bworkflow\x18\x02 \x01(\tH\x00R\bworkflow\x88\x01\x01\x12\x1b\n" +
+	"\x06status\x18\x03 \x01(\tH\x01R\x06status\x88\x01\x01\x12!\n" +
+	"\fupdated_from\x18\x04 \x01(\x03R\vupdatedFrom\x12\x1d\n" +
+	"\n" +
+	"updated_to\x18\x05 \x01(\x03R\tupdatedTo\x12\x14\n" +
+	"\x05limit\x18\x06 \x01(\x05R\x05limit\x12\x1d\n" +
+	"\n" +
+	"partial_ok\x18\a \x01(\bR\tpartialOk\x12\x1a\n" +
+	"\bsemantic\x18\b \x01(\bR\bsemanticB\v\n" +
+	"\t_workflowB\t\n" +
+	"\a_status\"\x8d\x02\n" +
+	"\tSearchHit\x12\x1f\n" +
+	"\vinstance_id\x18\x01 \x01(\tR\n" +
+	"instanceId\x12\x1a\n" +
+	"\bworkflow\x18\x02 \x01(\tR\bworkflow\x12\x18\n" +
+	"\aversion\x18\x03 \x01(\x05R\aversion\x12\x16\n" +
+	"\x06status\x18\x04 \x01(\tR\x06status\x12%\n" +
+	"\x0ecorrelation_id\x18\x05 \x01(\tR\rcorrelationId\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x06 \x01(\x03R\tcreatedAt\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\a \x01(\x03R\tupdatedAt\x12\x14\n" +
+	"\x05score\x18\b \x01(\x01R\x05score\x12\x16\n" +
+	"\x06purged\x18\t \x01(\bR\x06purged\"o\n" +
+	"\fSearchResult\x12/\n" +
+	"\x04hits\x18\x01 \x03(\v2\x1b.com.wiggle.proto.SearchHitR\x04hits\x12\x18\n" +
+	"\apartial\x18\x02 \x01(\bR\apartial\x12\x14\n" +
+	"\x05model\x18\x03 \x01(\tR\x05model\"\a\n" +
 	"\x05Empty\"\x15\n" +
 	"\x03Ack\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\"R\n" +
@@ -2248,19 +4394,44 @@ const file_wiggle_proto_rawDesc = "" +
 	"\vClusterView\x12\x12\n" +
 	"\x04self\x18\x01 \x01(\tR\x04self\x12\x16\n" +
 	"\x06leader\x18\x02 \x01(\bR\x06leader\x129\n" +
-	"\amembers\x18\x03 \x03(\v2\x1f.com.wiggle.proto.ClusterMemberR\amembers\"M\n" +
+	"\amembers\x18\x03 \x03(\v2\x1f.com.wiggle.proto.ClusterMemberR\amembers\"c\n" +
 	"\x12WorkflowDefinition\x127\n" +
 	"\n" +
 	"definition\x18\x01 \x01(\v2\x17.google.protobuf.StructR\n" +
-	"definition\"-\n" +
+	"definition\x12\x14\n" +
+	"\x05force\x18\x02 \x01(\bR\x05force\"-\n" +
 	"\rWorkflowNames\x12\x1c\n" +
 	"\tworkflows\x18\x01 \x03(\tR\tworkflows\"\\\n" +
 	"\x16RegisterWorkflowResult\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\tR\aversion\x12\x14\n" +
-	"\x05nodes\x18\x03 \x01(\x03R\x05nodes\"(\n" +
+	"\x05nodes\x18\x03 \x01(\x03R\x05nodes\"S\n" +
 	"\x12GetWorkflowRequest\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\"\xce\x01\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1d\n" +
+	"\aversion\x18\x02 \x01(\x05H\x00R\aversion\x88\x01\x01B\n" +
+	"\n" +
+	"\b_version\"G\n" +
+	"\x0fWorkflowVersion\x12\x1a\n" +
+	"\bworkflow\x18\x01 \x01(\tR\bworkflow\x12\x18\n" +
+	"\aversion\x18\x02 \x01(\x05R\aversion\"*\n" +
+	"\x16BacklogCoverageRequest\x12\x10\n" +
+	"\x03max\x18\x01 \x01(\x05R\x03max\"\xae\x02\n" +
+	"\fBacklogSlice\x12\x1a\n" +
+	"\bworkflow\x18\x01 \x01(\tR\bworkflow\x12\x18\n" +
+	"\aversion\x18\x02 \x01(\x05R\aversion\x12\x14\n" +
+	"\x05queue\x18\x03 \x01(\tR\x05queue\x12\x1f\n" +
+	"\vready_count\x18\x04 \x01(\x05R\n" +
+	"readyCount\x12.\n" +
+	"\x13oldest_available_at\x18\x05 \x01(\x03R\x11oldestAvailableAt\x12\x18\n" +
+	"\acovered\x18\x06 \x01(\bR\acovered\x12\x1a\n" +
+	"\bcoverage\x18\a \x01(\tR\bcoverage\x12!\n" +
+	"\tclaimable\x18\b \x01(\x05H\x00R\tclaimable\x88\x01\x01\x12\x1a\n" +
+	"\bcriteria\x18\t \x03(\tR\bcriteriaB\f\n" +
+	"\n" +
+	"_claimable\"l\n" +
+	"\x0fBacklogCoverage\x126\n" +
+	"\x06slices\x18\x01 \x03(\v2\x1e.com.wiggle.proto.BacklogSliceR\x06slices\x12!\n" +
+	"\flive_pollers\x18\x02 \x01(\x05R\vlivePollers\"\xce\x01\n" +
 	"\x14StartInstanceRequest\x12\x1a\n" +
 	"\bworkflow\x18\x01 \x01(\tR\bworkflow\x120\n" +
 	"\acontext\x18\x02 \x01(\v2\x16.google.protobuf.ValueR\acontext\x12\x1d\n" +
@@ -2286,7 +4457,7 @@ const file_wiggle_proto_rawDesc = "" +
 	"\n" +
 	"updated_at\x18\t \x01(\x03R\tupdatedAtB\x15\n" +
 	"\x13_termination_reasonB\b\n" +
-	"\x06_error\"\x9e\x02\n" +
+	"\x06_error\"\xa3\x04\n" +
 	"\x05Token\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x12\n" +
@@ -2298,9 +4469,22 @@ const file_wiggle_proto_rawDesc = "" +
 	"\vlease_owner\x18\b \x01(\tH\x00R\n" +
 	"leaseOwner\x88\x01\x01\x12\"\n" +
 	"\n" +
-	"last_error\x18\t \x01(\tH\x01R\tlastError\x88\x01\x01B\x0e\n" +
+	"last_error\x18\t \x01(\tH\x01R\tlastError\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"started_at\x18\n" +
+	" \x01(\x03H\x02R\tstartedAt\x88\x01\x01\x12$\n" +
+	"\vfinished_at\x18\v \x01(\x03H\x03R\n" +
+	"finishedAt\x88\x01\x01\x121\n" +
+	"\x05input\x18\f \x01(\v2\x16.google.protobuf.ValueH\x04R\x05input\x88\x01\x01\x123\n" +
+	"\x06output\x18\r \x01(\v2\x16.google.protobuf.ValueH\x05R\x06output\x88\x01\x01\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x0e \x01(\x03R\tcreatedAtB\x0e\n" +
 	"\f_lease_ownerB\r\n" +
-	"\v_last_error\"}\n" +
+	"\v_last_errorB\r\n" +
+	"\v_started_atB\x0e\n" +
+	"\f_finished_atB\b\n" +
+	"\x06_inputB\t\n" +
+	"\a_output\"}\n" +
 	"\x0eInstanceDetail\x12:\n" +
 	"\binstance\x18\x01 \x01(\v2\x1e.com.wiggle.proto.InstanceViewR\binstance\x12/\n" +
 	"\x06tokens\x18\x02 \x03(\v2\x17.com.wiggle.proto.TokenR\x06tokens\"\xc1\x01\n" +
@@ -2346,14 +4530,38 @@ const file_wiggle_proto_rawDesc = "" +
 	"\x11ScheduleIdRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"4\n" +
 	"\x14CancelInstanceResult\x12\x1c\n" +
-	"\tcancelled\x18\x01 \x01(\tR\tcancelled\"\x98\x01\n" +
+	"\tcancelled\x18\x01 \x01(\tR\tcancelled\"\x94\x02\n" +
 	"\vPollRequest\x12\x1b\n" +
 	"\tworker_id\x18\x01 \x01(\tR\bworkerId\x12\x16\n" +
 	"\x06queues\x18\x02 \x03(\tR\x06queues\x12\x10\n" +
 	"\x03max\x18\x03 \x01(\x05R\x03max\x12!\n" +
 	"\flease_millis\x18\x04 \x01(\x03R\vleaseMillis\x12\x1f\n" +
 	"\vwait_millis\x18\x05 \x01(\x03R\n" +
-	"waitMillis\"\xa0\x04\n" +
+	"waitMillis\x12=\n" +
+	"\bversions\x18\x06 \x03(\v2!.com.wiggle.proto.WorkflowVersionR\bversions\x12;\n" +
+	"\bcriteria\x18\a \x03(\v2\x1f.com.wiggle.proto.QueueCriteriaR\bcriteria\"`\n" +
+	"\rQueueCriteria\x12\x14\n" +
+	"\x05queue\x18\x01 \x01(\tR\x05queue\x129\n" +
+	"\x05where\x18\x02 \x01(\v2#.com.wiggle.proto.CriteriaPredicateR\x05where\"\x8d\x02\n" +
+	"\x11CriteriaPredicate\x128\n" +
+	"\x03cmp\x18\x01 \x01(\v2$.com.wiggle.proto.CriteriaComparisonH\x00R\x03cmp\x12;\n" +
+	"\x06all_of\x18\x02 \x01(\v2\".com.wiggle.proto.CriteriaJunctionH\x00R\x05allOf\x12;\n" +
+	"\x06any_of\x18\x03 \x01(\v2\".com.wiggle.proto.CriteriaJunctionH\x00R\x05anyOf\x12?\n" +
+	"\anegated\x18\x04 \x01(\v2#.com.wiggle.proto.CriteriaPredicateH\x00R\anegatedB\x03\n" +
+	"\x01p\"M\n" +
+	"\x10CriteriaJunction\x129\n" +
+	"\x05terms\x18\x01 \x03(\v2#.com.wiggle.proto.CriteriaPredicateR\x05terms\"\x8f\x01\n" +
+	"\x12CriteriaComparison\x12\x14\n" +
+	"\x05field\x18\x01 \x01(\tR\x05field\x12\x0e\n" +
+	"\x02op\x18\x02 \x01(\tR\x02op\x125\n" +
+	"\x04args\x18\x03 \x03(\v2!.com.wiggle.proto.CriteriaLiteralR\x04args\x12\x1c\n" +
+	"\tattribute\x18\x04 \x01(\tR\tattribute\"z\n" +
+	"\x0fCriteriaLiteral\x12\x14\n" +
+	"\x04text\x18\x01 \x01(\tH\x00R\x04text\x12\x1a\n" +
+	"\ainteger\x18\x02 \x01(\x12H\x00R\ainteger\x12\x1a\n" +
+	"\adecimal\x18\x03 \x01(\tH\x00R\adecimal\x12\x14\n" +
+	"\x04flag\x18\x04 \x01(\bH\x00R\x04flagB\x03\n" +
+	"\x01v\"\xb5\x05\n" +
 	"\x0eTaskActivation\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x1f\n" +
 	"\vinstance_id\x18\x02 \x01(\tR\n" +
@@ -2375,32 +4583,105 @@ const file_wiggle_proto_rawDesc = "" +
 	"\n" +
 	"item_index\x18\x0f \x01(\x03R\titemIndex\x12 \n" +
 	"\fitem_map_key\x18\x10 \x01(\tR\n" +
-	"itemMapKey\"p\n" +
+	"itemMapKey\x12\x1f\n" +
+	"\vcollect_key\x18\x11 \x01(\tR\n" +
+	"collectKey\x12\x1b\n" +
+	"\tarm_names\x18\x12 \x03(\tR\barmNames\x12%\n" +
+	"\x0ecorrelation_id\x18\x13 \x01(\tR\rcorrelationId\x12.\n" +
+	"\x13instance_created_at\x18\x14 \x01(\x03R\x11instanceCreatedAt\"p\n" +
 	"\bTaskList\x126\n" +
 	"\x05tasks\x18\x01 \x03(\v2 .com.wiggle.proto.TaskActivationR\x05tasks\x12,\n" +
-	"\x12retry_after_millis\x18\x02 \x01(\x03R\x10retryAfterMillis\"\x8b\x01\n" +
+	"\x12retry_after_millis\x18\x02 \x01(\x03R\x10retryAfterMillis\"T\n" +
+	"\fEmittedEvent\x12\x12\n" +
+	"\x04type\x18\x01 \x01(\tR\x04type\x120\n" +
+	"\apayload\x18\x02 \x01(\v2\x16.google.protobuf.ValueR\apayload\"\xcd\x02\n" +
 	"\n" +
 	"StepResult\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12.\n" +
 	"\x05merge\x18\x02 \x01(\v2\x16.google.protobuf.ValueH\x00R\x05merge\x12)\n" +
-	"\x0fpredicate_value\x18\x03 \x01(\bH\x00R\x0epredicateValueB\t\n" +
-	"\aoutcome\"\x97\x01\n" +
-	"\x11AdvanceRunRequest\x12\x17\n" +
+	"\x0fpredicate_value\x18\x03 \x01(\bH\x00R\x0epredicateValue\x12\x1d\n" +
+	"\n" +
+	"started_at\x18\x05 \x01(\x03R\tstartedAt\x12\x1f\n" +
+	"\vfinished_at\x18\x06 \x01(\x03R\n" +
+	"finishedAt\x126\n" +
+	"\x06events\x18\a \x03(\v2\x1e.com.wiggle.proto.EmittedEventR\x06events\x12;\n" +
+	"\bbranches\x18\b \x03(\v2\x1f.com.wiggle.proto.CreatedBranchR\bbranchesB\t\n" +
+	"\aoutcomeJ\x04\b\x04\x10\x05R\x05error\"\x83\x01\n" +
+	"\rCreatedBranch\x12,\n" +
+	"\x05input\x18\x01 \x01(\v2\x16.google.protobuf.ValueR\x05input\x12\x10\n" +
+	"\x03key\x18\x02 \x01(\tR\x03key\x122\n" +
+	"\x05steps\x18\x03 \x03(\v2\x1c.com.wiggle.proto.BranchStepR\x05steps\"\xe9\x03\n" +
+	"\n" +
+	"BranchStep\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
+	"\x04kind\x18\x02 \x01(\tR\x04kind\x12 \n" +
+	"\vcompensable\x18\x03 \x01(\bR\vcompensable\x12\x14\n" +
+	"\x05queue\x18\x04 \x01(\tR\x05queue\x12,\n" +
+	"\x05retry\x18\x05 \x01(\v2\x16.google.protobuf.ValueR\x05retry\x12!\n" +
+	"\fsleep_millis\x18\x06 \x01(\x03R\vsleepMillis\x12\x18\n" +
+	"\acombine\x18\a \x01(\tR\acombine\x12\x1a\n" +
+	"\bworkflow\x18\b \x01(\tR\bworkflow\x12<\n" +
+	"\n" +
+	"escalation\x18\t \x03(\v2\x1c.com.wiggle.proto.BranchStepR\n" +
+	"escalation\x12/\n" +
+	"\x04arms\x18\n" +
+	" \x03(\v2\x1b.com.wiggle.proto.BranchArmR\x04arms\x120\n" +
+	"\x04body\x18\v \x03(\v2\x1c.com.wiggle.proto.BranchStepR\x04body\x12\x1f\n" +
+	"\vloop_budget\x18\f \x01(\x05R\n" +
+	"loopBudget\x122\n" +
+	"\x05cases\x18\r \x03(\v2\x1c.com.wiggle.proto.BranchCaseR\x05cases\"V\n" +
+	"\n" +
+	"BranchCase\x12\x14\n" +
+	"\x05guard\x18\x01 \x01(\tR\x05guard\x122\n" +
+	"\x05steps\x18\x02 \x03(\v2\x1c.com.wiggle.proto.BranchStepR\x05steps\"?\n" +
+	"\tBranchArm\x122\n" +
+	"\x05steps\x18\x01 \x03(\v2\x1c.com.wiggle.proto.BranchStepR\x05steps\"\xce\x01\n" +
+	"\vReportedRun\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x1f\n" +
 	"\vlease_owner\x18\x02 \x01(\tR\n" +
 	"leaseOwner\x122\n" +
 	"\x05steps\x18\x03 \x03(\v2\x1c.com.wiggle.proto.StepResultR\x05steps\x12\x14\n" +
-	"\x05final\x18\x04 \x01(\bR\x05final\"\x87\x01\n" +
-	"\x10AdvanceRunResult\x12'\n" +
+	"\x05final\x18\x04 \x01(\bR\x05final\x12;\n" +
+	"\bcriteria\x18\x05 \x03(\v2\x1f.com.wiggle.proto.QueueCriteriaR\bcriteria\"G\n" +
+	"\x12ReportStepsRequest\x121\n" +
+	"\x04runs\x18\x01 \x03(\v2\x1d.com.wiggle.proto.ReportedRunR\x04runs\"\x81\x01\n" +
+	"\n" +
+	"RunApplied\x12'\n" +
 	"\x0finstance_status\x18\x01 \x01(\tR\x0einstanceStatus\x12(\n" +
 	"\x10lease_expires_at\x18\x02 \x01(\x03R\x0eleaseExpiresAt\x12 \n" +
 	"\fnext_task_id\x18\x03 \x01(\tR\n" +
-	"nextTaskId\"}\n" +
-	"\x11TaskResultRequest\x12\x17\n" +
-	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x1f\n" +
-	"\vlease_owner\x18\x02 \x01(\tR\n" +
-	"leaseOwner\x12.\n" +
-	"\x06result\x18\x03 \x01(\v2\x16.google.protobuf.ValueR\x06result\"\x86\x01\n" +
+	"nextTaskId\"\x96\x01\n" +
+	"\n" +
+	"RunOutcome\x12\x17\n" +
+	"\atask_id\x18\x01 \x01(\tR\x06taskId\x126\n" +
+	"\aapplied\x18\x02 \x01(\v2\x1c.com.wiggle.proto.RunAppliedR\aapplied\x12!\n" +
+	"\ferror_status\x18\x03 \x01(\x05R\verrorStatus\x12\x14\n" +
+	"\x05error\x18\x04 \x01(\tR\x05error\"K\n" +
+	"\x11ReportStepsResult\x126\n" +
+	"\aresults\x18\x01 \x03(\v2\x1c.com.wiggle.proto.RunOutcomeR\aresults\"v\n" +
+	"\x10StepStatsRequest\x12\x1a\n" +
+	"\bworkflow\x18\x01 \x01(\tR\bworkflow\x12\x18\n" +
+	"\aversion\x18\x02 \x01(\x05R\aversion\x12\x14\n" +
+	"\x05since\x18\x03 \x01(\x03R\x05since\x12\x16\n" +
+	"\x06sample\x18\x04 \x01(\x05R\x06sample\"\x9c\x02\n" +
+	"\tNodeStats\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x14\n" +
+	"\x05count\x18\x03 \x01(\x03R\x05count\x12\x1f\n" +
+	"\vmean_millis\x18\x04 \x01(\x01R\n" +
+	"meanMillis\x12\x1d\n" +
+	"\n" +
+	"p50_millis\x18\x05 \x01(\x03R\tp50Millis\x12\x1d\n" +
+	"\n" +
+	"p95_millis\x18\x06 \x01(\x03R\tp95Millis\x12\x1d\n" +
+	"\n" +
+	"max_millis\x18\a \x01(\x03R\tmaxMillis\x12&\n" +
+	"\x0fwait_p50_millis\x18\b \x01(\x03R\rwaitP50Millis\x12&\n" +
+	"\x0fwait_p95_millis\x18\t \x01(\x03R\rwaitP95Millis\"t\n" +
+	"\tStepStats\x12\x1a\n" +
+	"\bworkflow\x18\x01 \x01(\tR\bworkflow\x12\x18\n" +
+	"\aversion\x18\x02 \x01(\x05R\aversion\x121\n" +
+	"\x05nodes\x18\x03 \x03(\v2\x1b.com.wiggle.proto.NodeStatsR\x05nodes\"\x86\x01\n" +
 	"\x12TaskFailureRequest\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x1f\n" +
 	"\vlease_owner\x18\x02 \x01(\tR\n" +
@@ -2413,12 +4694,42 @@ const file_wiggle_proto_rawDesc = "" +
 	"leaseOwner\x12#\n" +
 	"\rextend_millis\x18\x03 \x01(\x03R\fextendMillis\";\n" +
 	"\x0fHeartbeatResult\x12(\n" +
-	"\x10lease_expires_at\x18\x01 \x01(\x03R\x0eleaseExpiresAt2\xe7\v\n" +
+	"\x10lease_expires_at\x18\x01 \x01(\x03R\x0eleaseExpiresAt\"\x81\x01\n" +
+	"\x11PollEventsRequest\x12\x1a\n" +
+	"\bconsumer\x18\x01 \x01(\tR\bconsumer\x12\x10\n" +
+	"\x03max\x18\x02 \x01(\x05R\x03max\x12\x1f\n" +
+	"\vwait_millis\x18\x03 \x01(\x03R\n" +
+	"waitMillis\x12\x1d\n" +
+	"\n" +
+	"start_from\x18\x04 \x01(\x03R\tstartFrom\"\xc7\x02\n" +
+	"\tEventView\x12\x10\n" +
+	"\x03seq\x18\x01 \x01(\x03R\x03seq\x12\x1f\n" +
+	"\vinstance_id\x18\x02 \x01(\tR\n" +
+	"instanceId\x12\x1a\n" +
+	"\bworkflow\x18\x03 \x01(\tR\bworkflow\x12\x18\n" +
+	"\aversion\x18\x04 \x01(\x05R\aversion\x12%\n" +
+	"\x0ecorrelation_id\x18\x05 \x01(\tR\rcorrelationId\x12\x12\n" +
+	"\x04type\x18\x06 \x01(\tR\x04type\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\a \x01(\x03R\tcreatedAt\x120\n" +
+	"\apayload\x18\b \x01(\v2\x16.google.protobuf.ValueR\apayload\x12\x17\n" +
+	"\anode_id\x18\t \x01(\tR\x06nodeId\x12\x14\n" +
+	"\x05shard\x18\n" +
+	" \x01(\x05R\x05shard\x12\x16\n" +
+	"\x06cursor\x18\v \x01(\tR\x06cursor\"n\n" +
+	"\tEventList\x123\n" +
+	"\x06events\x18\x01 \x03(\v2\x1b.com.wiggle.proto.EventViewR\x06events\x12,\n" +
+	"\x12retry_after_millis\x18\x02 \x01(\x03R\x10retryAfterMillis\"n\n" +
+	"\x10AckEventsRequest\x12\x1a\n" +
+	"\bconsumer\x18\x01 \x01(\tR\bconsumer\x12\x1b\n" +
+	"\tacked_seq\x18\x02 \x01(\x03R\backedSeq\x12!\n" +
+	"\facked_cursor\x18\x03 \x01(\tR\vackedCursor2\xbe\x0e\n" +
 	"\x12WiggleControlPlane\x12F\n" +
 	"\vHealthCheck\x12\x17.com.wiggle.proto.Empty\x1a\x1e.com.wiggle.proto.HealthStatus\x12D\n" +
 	"\n" +
 	"GetCluster\x12\x17.com.wiggle.proto.Empty\x1a\x1d.com.wiggle.proto.ClusterView\x12I\n" +
-	"\rListWorkflows\x12\x17.com.wiggle.proto.Empty\x1a\x1f.com.wiggle.proto.WorkflowNames\x12b\n" +
+	"\rListWorkflows\x12\x17.com.wiggle.proto.Empty\x1a\x1f.com.wiggle.proto.WorkflowNames\x12a\n" +
+	"\x12GetBacklogCoverage\x12(.com.wiggle.proto.BacklogCoverageRequest\x1a!.com.wiggle.proto.BacklogCoverage\x12b\n" +
 	"\x10RegisterWorkflow\x12$.com.wiggle.proto.WorkflowDefinition\x1a(.com.wiggle.proto.RegisterWorkflowResult\x12Y\n" +
 	"\vGetWorkflow\x12$.com.wiggle.proto.GetWorkflowRequest\x1a$.com.wiggle.proto.WorkflowDefinition\x12^\n" +
 	"\rStartInstance\x12&.com.wiggle.proto.StartInstanceRequest\x1a%.com.wiggle.proto.StartInstanceResult\x12W\n" +
@@ -2429,12 +4740,15 @@ const file_wiggle_proto_rawDesc = "" +
 	"\x0eCreateSchedule\x12'.com.wiggle.proto.CreateScheduleRequest\x1a\x1e.com.wiggle.proto.ScheduleView\x12H\n" +
 	"\rListSchedules\x12\x17.com.wiggle.proto.Empty\x1a\x1e.com.wiggle.proto.ScheduleList\x12L\n" +
 	"\x0eDeleteSchedule\x12#.com.wiggle.proto.ScheduleIdRequest\x1a\x15.com.wiggle.proto.Ack\x12F\n" +
-	"\tPollTasks\x12\x1d.com.wiggle.proto.PollRequest\x1a\x1a.com.wiggle.proto.TaskList\x12J\n" +
-	"\fCompleteTask\x12#.com.wiggle.proto.TaskResultRequest\x1a\x15.com.wiggle.proto.Ack\x12G\n" +
+	"\tPollTasks\x12\x1d.com.wiggle.proto.PollRequest\x1a\x1a.com.wiggle.proto.TaskList\x12X\n" +
+	"\vReportSteps\x12$.com.wiggle.proto.ReportStepsRequest\x1a#.com.wiggle.proto.ReportStepsResult\x12G\n" +
 	"\bFailTask\x12$.com.wiggle.proto.TaskFailureRequest\x1a\x15.com.wiggle.proto.Ack\x12V\n" +
-	"\rHeartbeatTask\x12\".com.wiggle.proto.HeartbeatRequest\x1a!.com.wiggle.proto.HeartbeatResult\x12U\n" +
+	"\rHeartbeatTask\x12\".com.wiggle.proto.HeartbeatRequest\x1a!.com.wiggle.proto.HeartbeatResult\x12N\n" +
 	"\n" +
-	"AdvanceRun\x12#.com.wiggle.proto.AdvanceRunRequest\x1a\".com.wiggle.proto.AdvanceRunResultBE\n" +
+	"PollEvents\x12#.com.wiggle.proto.PollEventsRequest\x1a\x1b.com.wiggle.proto.EventList\x12F\n" +
+	"\tAckEvents\x12\".com.wiggle.proto.AckEventsRequest\x1a\x15.com.wiggle.proto.Ack\x12O\n" +
+	"\fGetStepStats\x12\".com.wiggle.proto.StepStatsRequest\x1a\x1b.com.wiggle.proto.StepStats\x12R\n" +
+	"\x0fSearchInstances\x12\x1f.com.wiggle.proto.SearchRequest\x1a\x1e.com.wiggle.proto.SearchResultBE\n" +
 	"\x10com.wiggle.protoP\x01Z/github.com/hadielmougy/wiggle-go/internal/pb;pbb\x06proto3"
 
 var (
@@ -2449,103 +4763,168 @@ func file_wiggle_proto_rawDescGZIP() []byte {
 	return file_wiggle_proto_rawDescData
 }
 
-var file_wiggle_proto_msgTypes = make([]protoimpl.MessageInfo, 34)
+var file_wiggle_proto_msgTypes = make([]protoimpl.MessageInfo, 60)
 var file_wiggle_proto_goTypes = []any{
-	(*Empty)(nil),                  // 0: com.wiggle.proto.Empty
-	(*Ack)(nil),                    // 1: com.wiggle.proto.Ack
-	(*HealthStatus)(nil),           // 2: com.wiggle.proto.HealthStatus
-	(*ClusterMember)(nil),          // 3: com.wiggle.proto.ClusterMember
-	(*ClusterView)(nil),            // 4: com.wiggle.proto.ClusterView
-	(*WorkflowDefinition)(nil),     // 5: com.wiggle.proto.WorkflowDefinition
-	(*WorkflowNames)(nil),          // 6: com.wiggle.proto.WorkflowNames
-	(*RegisterWorkflowResult)(nil), // 7: com.wiggle.proto.RegisterWorkflowResult
-	(*GetWorkflowRequest)(nil),     // 8: com.wiggle.proto.GetWorkflowRequest
-	(*StartInstanceRequest)(nil),   // 9: com.wiggle.proto.StartInstanceRequest
-	(*StartInstanceResult)(nil),    // 10: com.wiggle.proto.StartInstanceResult
-	(*InstanceView)(nil),           // 11: com.wiggle.proto.InstanceView
-	(*Token)(nil),                  // 12: com.wiggle.proto.Token
-	(*InstanceDetail)(nil),         // 13: com.wiggle.proto.InstanceDetail
-	(*ListInstancesRequest)(nil),   // 14: com.wiggle.proto.ListInstancesRequest
-	(*InstanceList)(nil),           // 15: com.wiggle.proto.InstanceList
-	(*InstanceIdRequest)(nil),      // 16: com.wiggle.proto.InstanceIdRequest
-	(*CancelInstanceRequest)(nil),  // 17: com.wiggle.proto.CancelInstanceRequest
-	(*SignalRequest)(nil),          // 18: com.wiggle.proto.SignalRequest
-	(*CreateScheduleRequest)(nil),  // 19: com.wiggle.proto.CreateScheduleRequest
-	(*ScheduleView)(nil),           // 20: com.wiggle.proto.ScheduleView
-	(*ScheduleList)(nil),           // 21: com.wiggle.proto.ScheduleList
-	(*ScheduleIdRequest)(nil),      // 22: com.wiggle.proto.ScheduleIdRequest
-	(*CancelInstanceResult)(nil),   // 23: com.wiggle.proto.CancelInstanceResult
-	(*PollRequest)(nil),            // 24: com.wiggle.proto.PollRequest
-	(*TaskActivation)(nil),         // 25: com.wiggle.proto.TaskActivation
-	(*TaskList)(nil),               // 26: com.wiggle.proto.TaskList
-	(*StepResult)(nil),             // 27: com.wiggle.proto.StepResult
-	(*AdvanceRunRequest)(nil),      // 28: com.wiggle.proto.AdvanceRunRequest
-	(*AdvanceRunResult)(nil),       // 29: com.wiggle.proto.AdvanceRunResult
-	(*TaskResultRequest)(nil),      // 30: com.wiggle.proto.TaskResultRequest
-	(*TaskFailureRequest)(nil),     // 31: com.wiggle.proto.TaskFailureRequest
-	(*HeartbeatRequest)(nil),       // 32: com.wiggle.proto.HeartbeatRequest
-	(*HeartbeatResult)(nil),        // 33: com.wiggle.proto.HeartbeatResult
-	(*structpb.Struct)(nil),        // 34: google.protobuf.Struct
-	(*structpb.Value)(nil),         // 35: google.protobuf.Value
+	(*SearchRequest)(nil),          // 0: com.wiggle.proto.SearchRequest
+	(*SearchHit)(nil),              // 1: com.wiggle.proto.SearchHit
+	(*SearchResult)(nil),           // 2: com.wiggle.proto.SearchResult
+	(*Empty)(nil),                  // 3: com.wiggle.proto.Empty
+	(*Ack)(nil),                    // 4: com.wiggle.proto.Ack
+	(*HealthStatus)(nil),           // 5: com.wiggle.proto.HealthStatus
+	(*ClusterMember)(nil),          // 6: com.wiggle.proto.ClusterMember
+	(*ClusterView)(nil),            // 7: com.wiggle.proto.ClusterView
+	(*WorkflowDefinition)(nil),     // 8: com.wiggle.proto.WorkflowDefinition
+	(*WorkflowNames)(nil),          // 9: com.wiggle.proto.WorkflowNames
+	(*RegisterWorkflowResult)(nil), // 10: com.wiggle.proto.RegisterWorkflowResult
+	(*GetWorkflowRequest)(nil),     // 11: com.wiggle.proto.GetWorkflowRequest
+	(*WorkflowVersion)(nil),        // 12: com.wiggle.proto.WorkflowVersion
+	(*BacklogCoverageRequest)(nil), // 13: com.wiggle.proto.BacklogCoverageRequest
+	(*BacklogSlice)(nil),           // 14: com.wiggle.proto.BacklogSlice
+	(*BacklogCoverage)(nil),        // 15: com.wiggle.proto.BacklogCoverage
+	(*StartInstanceRequest)(nil),   // 16: com.wiggle.proto.StartInstanceRequest
+	(*StartInstanceResult)(nil),    // 17: com.wiggle.proto.StartInstanceResult
+	(*InstanceView)(nil),           // 18: com.wiggle.proto.InstanceView
+	(*Token)(nil),                  // 19: com.wiggle.proto.Token
+	(*InstanceDetail)(nil),         // 20: com.wiggle.proto.InstanceDetail
+	(*ListInstancesRequest)(nil),   // 21: com.wiggle.proto.ListInstancesRequest
+	(*InstanceList)(nil),           // 22: com.wiggle.proto.InstanceList
+	(*InstanceIdRequest)(nil),      // 23: com.wiggle.proto.InstanceIdRequest
+	(*CancelInstanceRequest)(nil),  // 24: com.wiggle.proto.CancelInstanceRequest
+	(*SignalRequest)(nil),          // 25: com.wiggle.proto.SignalRequest
+	(*CreateScheduleRequest)(nil),  // 26: com.wiggle.proto.CreateScheduleRequest
+	(*ScheduleView)(nil),           // 27: com.wiggle.proto.ScheduleView
+	(*ScheduleList)(nil),           // 28: com.wiggle.proto.ScheduleList
+	(*ScheduleIdRequest)(nil),      // 29: com.wiggle.proto.ScheduleIdRequest
+	(*CancelInstanceResult)(nil),   // 30: com.wiggle.proto.CancelInstanceResult
+	(*PollRequest)(nil),            // 31: com.wiggle.proto.PollRequest
+	(*QueueCriteria)(nil),          // 32: com.wiggle.proto.QueueCriteria
+	(*CriteriaPredicate)(nil),      // 33: com.wiggle.proto.CriteriaPredicate
+	(*CriteriaJunction)(nil),       // 34: com.wiggle.proto.CriteriaJunction
+	(*CriteriaComparison)(nil),     // 35: com.wiggle.proto.CriteriaComparison
+	(*CriteriaLiteral)(nil),        // 36: com.wiggle.proto.CriteriaLiteral
+	(*TaskActivation)(nil),         // 37: com.wiggle.proto.TaskActivation
+	(*TaskList)(nil),               // 38: com.wiggle.proto.TaskList
+	(*EmittedEvent)(nil),           // 39: com.wiggle.proto.EmittedEvent
+	(*StepResult)(nil),             // 40: com.wiggle.proto.StepResult
+	(*CreatedBranch)(nil),          // 41: com.wiggle.proto.CreatedBranch
+	(*BranchStep)(nil),             // 42: com.wiggle.proto.BranchStep
+	(*BranchCase)(nil),             // 43: com.wiggle.proto.BranchCase
+	(*BranchArm)(nil),              // 44: com.wiggle.proto.BranchArm
+	(*ReportedRun)(nil),            // 45: com.wiggle.proto.ReportedRun
+	(*ReportStepsRequest)(nil),     // 46: com.wiggle.proto.ReportStepsRequest
+	(*RunApplied)(nil),             // 47: com.wiggle.proto.RunApplied
+	(*RunOutcome)(nil),             // 48: com.wiggle.proto.RunOutcome
+	(*ReportStepsResult)(nil),      // 49: com.wiggle.proto.ReportStepsResult
+	(*StepStatsRequest)(nil),       // 50: com.wiggle.proto.StepStatsRequest
+	(*NodeStats)(nil),              // 51: com.wiggle.proto.NodeStats
+	(*StepStats)(nil),              // 52: com.wiggle.proto.StepStats
+	(*TaskFailureRequest)(nil),     // 53: com.wiggle.proto.TaskFailureRequest
+	(*HeartbeatRequest)(nil),       // 54: com.wiggle.proto.HeartbeatRequest
+	(*HeartbeatResult)(nil),        // 55: com.wiggle.proto.HeartbeatResult
+	(*PollEventsRequest)(nil),      // 56: com.wiggle.proto.PollEventsRequest
+	(*EventView)(nil),              // 57: com.wiggle.proto.EventView
+	(*EventList)(nil),              // 58: com.wiggle.proto.EventList
+	(*AckEventsRequest)(nil),       // 59: com.wiggle.proto.AckEventsRequest
+	(*structpb.Struct)(nil),        // 60: google.protobuf.Struct
+	(*structpb.Value)(nil),         // 61: google.protobuf.Value
 }
 var file_wiggle_proto_depIdxs = []int32{
-	3,  // 0: com.wiggle.proto.ClusterView.members:type_name -> com.wiggle.proto.ClusterMember
-	34, // 1: com.wiggle.proto.WorkflowDefinition.definition:type_name -> google.protobuf.Struct
-	35, // 2: com.wiggle.proto.StartInstanceRequest.context:type_name -> google.protobuf.Value
-	35, // 3: com.wiggle.proto.InstanceView.context:type_name -> google.protobuf.Value
-	11, // 4: com.wiggle.proto.InstanceDetail.instance:type_name -> com.wiggle.proto.InstanceView
-	12, // 5: com.wiggle.proto.InstanceDetail.tokens:type_name -> com.wiggle.proto.Token
-	11, // 6: com.wiggle.proto.InstanceList.instances:type_name -> com.wiggle.proto.InstanceView
-	35, // 7: com.wiggle.proto.SignalRequest.payload:type_name -> google.protobuf.Value
-	35, // 8: com.wiggle.proto.CreateScheduleRequest.context:type_name -> google.protobuf.Value
-	20, // 9: com.wiggle.proto.ScheduleList.schedules:type_name -> com.wiggle.proto.ScheduleView
-	35, // 10: com.wiggle.proto.TaskActivation.context:type_name -> google.protobuf.Value
-	35, // 11: com.wiggle.proto.TaskActivation.base_context:type_name -> google.protobuf.Value
-	25, // 12: com.wiggle.proto.TaskList.tasks:type_name -> com.wiggle.proto.TaskActivation
-	35, // 13: com.wiggle.proto.StepResult.merge:type_name -> google.protobuf.Value
-	27, // 14: com.wiggle.proto.AdvanceRunRequest.steps:type_name -> com.wiggle.proto.StepResult
-	35, // 15: com.wiggle.proto.TaskResultRequest.result:type_name -> google.protobuf.Value
-	0,  // 16: com.wiggle.proto.WiggleControlPlane.HealthCheck:input_type -> com.wiggle.proto.Empty
-	0,  // 17: com.wiggle.proto.WiggleControlPlane.GetCluster:input_type -> com.wiggle.proto.Empty
-	0,  // 18: com.wiggle.proto.WiggleControlPlane.ListWorkflows:input_type -> com.wiggle.proto.Empty
-	5,  // 19: com.wiggle.proto.WiggleControlPlane.RegisterWorkflow:input_type -> com.wiggle.proto.WorkflowDefinition
-	8,  // 20: com.wiggle.proto.WiggleControlPlane.GetWorkflow:input_type -> com.wiggle.proto.GetWorkflowRequest
-	9,  // 21: com.wiggle.proto.WiggleControlPlane.StartInstance:input_type -> com.wiggle.proto.StartInstanceRequest
-	14, // 22: com.wiggle.proto.WiggleControlPlane.ListInstances:input_type -> com.wiggle.proto.ListInstancesRequest
-	16, // 23: com.wiggle.proto.WiggleControlPlane.GetInstance:input_type -> com.wiggle.proto.InstanceIdRequest
-	17, // 24: com.wiggle.proto.WiggleControlPlane.CancelInstance:input_type -> com.wiggle.proto.CancelInstanceRequest
-	18, // 25: com.wiggle.proto.WiggleControlPlane.SignalInstance:input_type -> com.wiggle.proto.SignalRequest
-	19, // 26: com.wiggle.proto.WiggleControlPlane.CreateSchedule:input_type -> com.wiggle.proto.CreateScheduleRequest
-	0,  // 27: com.wiggle.proto.WiggleControlPlane.ListSchedules:input_type -> com.wiggle.proto.Empty
-	22, // 28: com.wiggle.proto.WiggleControlPlane.DeleteSchedule:input_type -> com.wiggle.proto.ScheduleIdRequest
-	24, // 29: com.wiggle.proto.WiggleControlPlane.PollTasks:input_type -> com.wiggle.proto.PollRequest
-	30, // 30: com.wiggle.proto.WiggleControlPlane.CompleteTask:input_type -> com.wiggle.proto.TaskResultRequest
-	31, // 31: com.wiggle.proto.WiggleControlPlane.FailTask:input_type -> com.wiggle.proto.TaskFailureRequest
-	32, // 32: com.wiggle.proto.WiggleControlPlane.HeartbeatTask:input_type -> com.wiggle.proto.HeartbeatRequest
-	28, // 33: com.wiggle.proto.WiggleControlPlane.AdvanceRun:input_type -> com.wiggle.proto.AdvanceRunRequest
-	2,  // 34: com.wiggle.proto.WiggleControlPlane.HealthCheck:output_type -> com.wiggle.proto.HealthStatus
-	4,  // 35: com.wiggle.proto.WiggleControlPlane.GetCluster:output_type -> com.wiggle.proto.ClusterView
-	6,  // 36: com.wiggle.proto.WiggleControlPlane.ListWorkflows:output_type -> com.wiggle.proto.WorkflowNames
-	7,  // 37: com.wiggle.proto.WiggleControlPlane.RegisterWorkflow:output_type -> com.wiggle.proto.RegisterWorkflowResult
-	5,  // 38: com.wiggle.proto.WiggleControlPlane.GetWorkflow:output_type -> com.wiggle.proto.WorkflowDefinition
-	10, // 39: com.wiggle.proto.WiggleControlPlane.StartInstance:output_type -> com.wiggle.proto.StartInstanceResult
-	15, // 40: com.wiggle.proto.WiggleControlPlane.ListInstances:output_type -> com.wiggle.proto.InstanceList
-	13, // 41: com.wiggle.proto.WiggleControlPlane.GetInstance:output_type -> com.wiggle.proto.InstanceDetail
-	23, // 42: com.wiggle.proto.WiggleControlPlane.CancelInstance:output_type -> com.wiggle.proto.CancelInstanceResult
-	1,  // 43: com.wiggle.proto.WiggleControlPlane.SignalInstance:output_type -> com.wiggle.proto.Ack
-	20, // 44: com.wiggle.proto.WiggleControlPlane.CreateSchedule:output_type -> com.wiggle.proto.ScheduleView
-	21, // 45: com.wiggle.proto.WiggleControlPlane.ListSchedules:output_type -> com.wiggle.proto.ScheduleList
-	1,  // 46: com.wiggle.proto.WiggleControlPlane.DeleteSchedule:output_type -> com.wiggle.proto.Ack
-	26, // 47: com.wiggle.proto.WiggleControlPlane.PollTasks:output_type -> com.wiggle.proto.TaskList
-	1,  // 48: com.wiggle.proto.WiggleControlPlane.CompleteTask:output_type -> com.wiggle.proto.Ack
-	1,  // 49: com.wiggle.proto.WiggleControlPlane.FailTask:output_type -> com.wiggle.proto.Ack
-	33, // 50: com.wiggle.proto.WiggleControlPlane.HeartbeatTask:output_type -> com.wiggle.proto.HeartbeatResult
-	29, // 51: com.wiggle.proto.WiggleControlPlane.AdvanceRun:output_type -> com.wiggle.proto.AdvanceRunResult
-	34, // [34:52] is the sub-list for method output_type
-	16, // [16:34] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	1,  // 0: com.wiggle.proto.SearchResult.hits:type_name -> com.wiggle.proto.SearchHit
+	6,  // 1: com.wiggle.proto.ClusterView.members:type_name -> com.wiggle.proto.ClusterMember
+	60, // 2: com.wiggle.proto.WorkflowDefinition.definition:type_name -> google.protobuf.Struct
+	14, // 3: com.wiggle.proto.BacklogCoverage.slices:type_name -> com.wiggle.proto.BacklogSlice
+	61, // 4: com.wiggle.proto.StartInstanceRequest.context:type_name -> google.protobuf.Value
+	61, // 5: com.wiggle.proto.InstanceView.context:type_name -> google.protobuf.Value
+	61, // 6: com.wiggle.proto.Token.input:type_name -> google.protobuf.Value
+	61, // 7: com.wiggle.proto.Token.output:type_name -> google.protobuf.Value
+	18, // 8: com.wiggle.proto.InstanceDetail.instance:type_name -> com.wiggle.proto.InstanceView
+	19, // 9: com.wiggle.proto.InstanceDetail.tokens:type_name -> com.wiggle.proto.Token
+	18, // 10: com.wiggle.proto.InstanceList.instances:type_name -> com.wiggle.proto.InstanceView
+	61, // 11: com.wiggle.proto.SignalRequest.payload:type_name -> google.protobuf.Value
+	61, // 12: com.wiggle.proto.CreateScheduleRequest.context:type_name -> google.protobuf.Value
+	27, // 13: com.wiggle.proto.ScheduleList.schedules:type_name -> com.wiggle.proto.ScheduleView
+	12, // 14: com.wiggle.proto.PollRequest.versions:type_name -> com.wiggle.proto.WorkflowVersion
+	32, // 15: com.wiggle.proto.PollRequest.criteria:type_name -> com.wiggle.proto.QueueCriteria
+	33, // 16: com.wiggle.proto.QueueCriteria.where:type_name -> com.wiggle.proto.CriteriaPredicate
+	35, // 17: com.wiggle.proto.CriteriaPredicate.cmp:type_name -> com.wiggle.proto.CriteriaComparison
+	34, // 18: com.wiggle.proto.CriteriaPredicate.all_of:type_name -> com.wiggle.proto.CriteriaJunction
+	34, // 19: com.wiggle.proto.CriteriaPredicate.any_of:type_name -> com.wiggle.proto.CriteriaJunction
+	33, // 20: com.wiggle.proto.CriteriaPredicate.negated:type_name -> com.wiggle.proto.CriteriaPredicate
+	33, // 21: com.wiggle.proto.CriteriaJunction.terms:type_name -> com.wiggle.proto.CriteriaPredicate
+	36, // 22: com.wiggle.proto.CriteriaComparison.args:type_name -> com.wiggle.proto.CriteriaLiteral
+	61, // 23: com.wiggle.proto.TaskActivation.context:type_name -> google.protobuf.Value
+	61, // 24: com.wiggle.proto.TaskActivation.base_context:type_name -> google.protobuf.Value
+	37, // 25: com.wiggle.proto.TaskList.tasks:type_name -> com.wiggle.proto.TaskActivation
+	61, // 26: com.wiggle.proto.EmittedEvent.payload:type_name -> google.protobuf.Value
+	61, // 27: com.wiggle.proto.StepResult.merge:type_name -> google.protobuf.Value
+	39, // 28: com.wiggle.proto.StepResult.events:type_name -> com.wiggle.proto.EmittedEvent
+	41, // 29: com.wiggle.proto.StepResult.branches:type_name -> com.wiggle.proto.CreatedBranch
+	61, // 30: com.wiggle.proto.CreatedBranch.input:type_name -> google.protobuf.Value
+	42, // 31: com.wiggle.proto.CreatedBranch.steps:type_name -> com.wiggle.proto.BranchStep
+	61, // 32: com.wiggle.proto.BranchStep.retry:type_name -> google.protobuf.Value
+	42, // 33: com.wiggle.proto.BranchStep.escalation:type_name -> com.wiggle.proto.BranchStep
+	44, // 34: com.wiggle.proto.BranchStep.arms:type_name -> com.wiggle.proto.BranchArm
+	42, // 35: com.wiggle.proto.BranchStep.body:type_name -> com.wiggle.proto.BranchStep
+	43, // 36: com.wiggle.proto.BranchStep.cases:type_name -> com.wiggle.proto.BranchCase
+	42, // 37: com.wiggle.proto.BranchCase.steps:type_name -> com.wiggle.proto.BranchStep
+	42, // 38: com.wiggle.proto.BranchArm.steps:type_name -> com.wiggle.proto.BranchStep
+	40, // 39: com.wiggle.proto.ReportedRun.steps:type_name -> com.wiggle.proto.StepResult
+	32, // 40: com.wiggle.proto.ReportedRun.criteria:type_name -> com.wiggle.proto.QueueCriteria
+	45, // 41: com.wiggle.proto.ReportStepsRequest.runs:type_name -> com.wiggle.proto.ReportedRun
+	47, // 42: com.wiggle.proto.RunOutcome.applied:type_name -> com.wiggle.proto.RunApplied
+	48, // 43: com.wiggle.proto.ReportStepsResult.results:type_name -> com.wiggle.proto.RunOutcome
+	51, // 44: com.wiggle.proto.StepStats.nodes:type_name -> com.wiggle.proto.NodeStats
+	61, // 45: com.wiggle.proto.EventView.payload:type_name -> google.protobuf.Value
+	57, // 46: com.wiggle.proto.EventList.events:type_name -> com.wiggle.proto.EventView
+	3,  // 47: com.wiggle.proto.WiggleControlPlane.HealthCheck:input_type -> com.wiggle.proto.Empty
+	3,  // 48: com.wiggle.proto.WiggleControlPlane.GetCluster:input_type -> com.wiggle.proto.Empty
+	3,  // 49: com.wiggle.proto.WiggleControlPlane.ListWorkflows:input_type -> com.wiggle.proto.Empty
+	13, // 50: com.wiggle.proto.WiggleControlPlane.GetBacklogCoverage:input_type -> com.wiggle.proto.BacklogCoverageRequest
+	8,  // 51: com.wiggle.proto.WiggleControlPlane.RegisterWorkflow:input_type -> com.wiggle.proto.WorkflowDefinition
+	11, // 52: com.wiggle.proto.WiggleControlPlane.GetWorkflow:input_type -> com.wiggle.proto.GetWorkflowRequest
+	16, // 53: com.wiggle.proto.WiggleControlPlane.StartInstance:input_type -> com.wiggle.proto.StartInstanceRequest
+	21, // 54: com.wiggle.proto.WiggleControlPlane.ListInstances:input_type -> com.wiggle.proto.ListInstancesRequest
+	23, // 55: com.wiggle.proto.WiggleControlPlane.GetInstance:input_type -> com.wiggle.proto.InstanceIdRequest
+	24, // 56: com.wiggle.proto.WiggleControlPlane.CancelInstance:input_type -> com.wiggle.proto.CancelInstanceRequest
+	25, // 57: com.wiggle.proto.WiggleControlPlane.SignalInstance:input_type -> com.wiggle.proto.SignalRequest
+	26, // 58: com.wiggle.proto.WiggleControlPlane.CreateSchedule:input_type -> com.wiggle.proto.CreateScheduleRequest
+	3,  // 59: com.wiggle.proto.WiggleControlPlane.ListSchedules:input_type -> com.wiggle.proto.Empty
+	29, // 60: com.wiggle.proto.WiggleControlPlane.DeleteSchedule:input_type -> com.wiggle.proto.ScheduleIdRequest
+	31, // 61: com.wiggle.proto.WiggleControlPlane.PollTasks:input_type -> com.wiggle.proto.PollRequest
+	46, // 62: com.wiggle.proto.WiggleControlPlane.ReportSteps:input_type -> com.wiggle.proto.ReportStepsRequest
+	53, // 63: com.wiggle.proto.WiggleControlPlane.FailTask:input_type -> com.wiggle.proto.TaskFailureRequest
+	54, // 64: com.wiggle.proto.WiggleControlPlane.HeartbeatTask:input_type -> com.wiggle.proto.HeartbeatRequest
+	56, // 65: com.wiggle.proto.WiggleControlPlane.PollEvents:input_type -> com.wiggle.proto.PollEventsRequest
+	59, // 66: com.wiggle.proto.WiggleControlPlane.AckEvents:input_type -> com.wiggle.proto.AckEventsRequest
+	50, // 67: com.wiggle.proto.WiggleControlPlane.GetStepStats:input_type -> com.wiggle.proto.StepStatsRequest
+	0,  // 68: com.wiggle.proto.WiggleControlPlane.SearchInstances:input_type -> com.wiggle.proto.SearchRequest
+	5,  // 69: com.wiggle.proto.WiggleControlPlane.HealthCheck:output_type -> com.wiggle.proto.HealthStatus
+	7,  // 70: com.wiggle.proto.WiggleControlPlane.GetCluster:output_type -> com.wiggle.proto.ClusterView
+	9,  // 71: com.wiggle.proto.WiggleControlPlane.ListWorkflows:output_type -> com.wiggle.proto.WorkflowNames
+	15, // 72: com.wiggle.proto.WiggleControlPlane.GetBacklogCoverage:output_type -> com.wiggle.proto.BacklogCoverage
+	10, // 73: com.wiggle.proto.WiggleControlPlane.RegisterWorkflow:output_type -> com.wiggle.proto.RegisterWorkflowResult
+	8,  // 74: com.wiggle.proto.WiggleControlPlane.GetWorkflow:output_type -> com.wiggle.proto.WorkflowDefinition
+	17, // 75: com.wiggle.proto.WiggleControlPlane.StartInstance:output_type -> com.wiggle.proto.StartInstanceResult
+	22, // 76: com.wiggle.proto.WiggleControlPlane.ListInstances:output_type -> com.wiggle.proto.InstanceList
+	20, // 77: com.wiggle.proto.WiggleControlPlane.GetInstance:output_type -> com.wiggle.proto.InstanceDetail
+	30, // 78: com.wiggle.proto.WiggleControlPlane.CancelInstance:output_type -> com.wiggle.proto.CancelInstanceResult
+	4,  // 79: com.wiggle.proto.WiggleControlPlane.SignalInstance:output_type -> com.wiggle.proto.Ack
+	27, // 80: com.wiggle.proto.WiggleControlPlane.CreateSchedule:output_type -> com.wiggle.proto.ScheduleView
+	28, // 81: com.wiggle.proto.WiggleControlPlane.ListSchedules:output_type -> com.wiggle.proto.ScheduleList
+	4,  // 82: com.wiggle.proto.WiggleControlPlane.DeleteSchedule:output_type -> com.wiggle.proto.Ack
+	38, // 83: com.wiggle.proto.WiggleControlPlane.PollTasks:output_type -> com.wiggle.proto.TaskList
+	49, // 84: com.wiggle.proto.WiggleControlPlane.ReportSteps:output_type -> com.wiggle.proto.ReportStepsResult
+	4,  // 85: com.wiggle.proto.WiggleControlPlane.FailTask:output_type -> com.wiggle.proto.Ack
+	55, // 86: com.wiggle.proto.WiggleControlPlane.HeartbeatTask:output_type -> com.wiggle.proto.HeartbeatResult
+	58, // 87: com.wiggle.proto.WiggleControlPlane.PollEvents:output_type -> com.wiggle.proto.EventList
+	4,  // 88: com.wiggle.proto.WiggleControlPlane.AckEvents:output_type -> com.wiggle.proto.Ack
+	52, // 89: com.wiggle.proto.WiggleControlPlane.GetStepStats:output_type -> com.wiggle.proto.StepStats
+	2,  // 90: com.wiggle.proto.WiggleControlPlane.SearchInstances:output_type -> com.wiggle.proto.SearchResult
+	69, // [69:91] is the sub-list for method output_type
+	47, // [47:69] is the sub-list for method input_type
+	47, // [47:47] is the sub-list for extension type_name
+	47, // [47:47] is the sub-list for extension extendee
+	0,  // [0:47] is the sub-list for field type_name
 }
 
 func init() { file_wiggle_proto_init() }
@@ -2553,15 +4932,30 @@ func file_wiggle_proto_init() {
 	if File_wiggle_proto != nil {
 		return
 	}
-	file_wiggle_proto_msgTypes[9].OneofWrappers = []any{}
+	file_wiggle_proto_msgTypes[0].OneofWrappers = []any{}
 	file_wiggle_proto_msgTypes[11].OneofWrappers = []any{}
-	file_wiggle_proto_msgTypes[12].OneofWrappers = []any{}
 	file_wiggle_proto_msgTypes[14].OneofWrappers = []any{}
-	file_wiggle_proto_msgTypes[19].OneofWrappers = []any{
+	file_wiggle_proto_msgTypes[16].OneofWrappers = []any{}
+	file_wiggle_proto_msgTypes[18].OneofWrappers = []any{}
+	file_wiggle_proto_msgTypes[19].OneofWrappers = []any{}
+	file_wiggle_proto_msgTypes[21].OneofWrappers = []any{}
+	file_wiggle_proto_msgTypes[26].OneofWrappers = []any{
 		(*CreateScheduleRequest_EveryMillis)(nil),
 		(*CreateScheduleRequest_Cron)(nil),
 	}
-	file_wiggle_proto_msgTypes[27].OneofWrappers = []any{
+	file_wiggle_proto_msgTypes[33].OneofWrappers = []any{
+		(*CriteriaPredicate_Cmp)(nil),
+		(*CriteriaPredicate_AllOf)(nil),
+		(*CriteriaPredicate_AnyOf)(nil),
+		(*CriteriaPredicate_Negated)(nil),
+	}
+	file_wiggle_proto_msgTypes[36].OneofWrappers = []any{
+		(*CriteriaLiteral_Text)(nil),
+		(*CriteriaLiteral_Integer)(nil),
+		(*CriteriaLiteral_Decimal)(nil),
+		(*CriteriaLiteral_Flag)(nil),
+	}
+	file_wiggle_proto_msgTypes[40].OneofWrappers = []any{
 		(*StepResult_Merge)(nil),
 		(*StepResult_PredicateValue)(nil),
 	}
@@ -2571,7 +4965,7 @@ func file_wiggle_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_wiggle_proto_rawDesc), len(file_wiggle_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   34,
+			NumMessages:   60,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

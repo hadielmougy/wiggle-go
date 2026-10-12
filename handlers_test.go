@@ -52,18 +52,18 @@ func TestRegisterHandlersMatchesByNameAndKind(t *testing.T) {
 		}
 	}
 	// gate wrapper returns the bool
-	got, err := w.handlers["order#in-stock"](Context{"qty": 2.0})
+	got, err := w.handlers["order#in-stock"](nil, Context{"qty": 2.0})
 	if err != nil || got != true {
 		t.Fatalf("gate = %v, %v", got, err)
 	}
 	// task wrapper returns the WHOLE next context (it replaces server-side)
-	res, _ := w.handlers["order#charge"](Context{"orderId": "o1", "qty": 1.0})
+	res, _ := w.handlers["order#charge"](nil, Context{"orderId": "o1", "qty": 1.0})
 	m := res.(Context)
 	if m["paid"] != true || m["orderId"] != "o1" {
 		t.Fatalf("charge result = %v (want the complete context incl. paid)", m)
 	}
 	// effect wrapper returns nil
-	if r, _ := w.handlers["order#notify"](Context{}); r != nil {
+	if r, _ := w.handlers["order#notify"](nil, Context{}); r != nil {
 		t.Fatalf("effect result = %v, want nil", r)
 	}
 	// queue discovered from the graph
@@ -237,7 +237,7 @@ func TestCompensatorBindsAndSplitsSnapshots(t *testing.T) {
 		t.Fatalf("compensator inherits the forward step's queue, got %q", comp.queue)
 	}
 	// The engine stages the two snapshots as {"input":..., "result":...}; the wrapper splits them.
-	out, err := comp.handler(Context{
+	out, err := comp.handler(nil, Context{
 		"input":  map[string]any{"orderId": "o1"},
 		"result": map[string]any{"orderId": "o1", "reservationRef": "r-9"},
 	})
