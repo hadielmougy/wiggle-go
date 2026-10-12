@@ -43,7 +43,7 @@ func WithQueues(names ...string) WorkerOption {
 }
 
 // WithCriteria serves each criteria's queue, claiming only the tasks its predicate holds for (see
-// package criteria), instead of the queues of the steps the worker binds. It replaces Queues.
+// package criteria), instead of the queues of the steps the worker binds. It replaces WithQueues.
 func WithCriteria(cs ...criteria.QueueCriteria) WorkerOption {
 	return func(w *Worker) { w.criteria = append(w.criteria, cs...) }
 }
