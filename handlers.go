@@ -50,6 +50,13 @@ type handlerSet struct {
 	workflow     string
 	candidates   map[string]handlerCandidate // keyed by canonical (case-folded) name
 	compensators map[string]compCandidate    // keyed by canonical TARGET step name
+	branch       map[string]bool             // canonical names of steps only created branches run
+}
+
+// BranchStepper is implemented by a RegisterHandlers struct whose methods include steps only
+// branches created at run time run; it declares them as Worker.BranchSteps does.
+type BranchStepper interface {
+	BranchSteps() []string
 }
 
 type compCandidate struct {
@@ -116,6 +123,9 @@ func (w *Worker) RegisterHandlers(workflow string, handlers any) *Worker {
 	if len(set.candidates) == 0 && len(set.compensators) == 0 {
 		panic(fmt.Sprintf("RegisterHandlers: %T exposes no handler methods (want a method shaped like "+
 			"func(Context)(Context,error), func(Context)(bool,error), or func(Context)error)", handlers))
+	}
+	if bs, ok := handlers.(BranchStepper); ok {
+		w.BranchSteps(workflow, bs.BranchSteps()...)
 	}
 	w.handlerSets = append(w.handlerSets, set)
 	return w
@@ -249,6 +259,7 @@ func (w *Worker) matchHandlerSet(ctx context.Context, set handlerSet) error {
 	if err != nil {
 		return err
 	}
+	set.branch = w.branchSteps[set.workflow]
 	bindings, err := bindHandlerSet(graph, set)
 	if err != nil {
 		return err
@@ -296,6 +307,9 @@ func bindHandlerSet(graph map[string]any, set handlerSet) ([]binding, error) {
 	for _, canon := range sortedKeys(set.candidates) { // deterministic order for stable errors
 		cand := set.candidates[canon]
 		node, ok := nodeByCanon[canon]
+		if !ok && set.branch[canon] {
+			continue // bound by bindCreated on its first dispatch
+		}
 		if !ok {
 			return nil, fmt.Errorf("handler %q matches no step in workflow %q (available: %v)",
 				cand.name, set.workflow, sortedValues(stepByCanon))
@@ -334,6 +348,9 @@ func bindHandlerSet(graph map[string]any, set handlerSet) ([]binding, error) {
 	for _, canon := range sortedCompKeys(set.compensators) {
 		comp := set.compensators[canon]
 		node, ok := nodeByCanon[canon]
+		if !ok && set.branch[canon] {
+			continue
+		}
 		if !ok {
 			return nil, fmt.Errorf("compensator %q targets no step in workflow %q (available: %v)",
 				comp.name, set.workflow, sortedValues(stepByCanon))
@@ -367,6 +384,38 @@ func bindHandlerSet(graph map[string]any, set handlerSet) ([]binding, error) {
 		}
 	}
 	return bindings, nil
+}
+
+// bindCreated is the handler for a step a created branch runs -- in no graph, so matched by name
+// on dispatch -- or nil when no method of set implements it. kind and combine describe the
+// dispatched task; undo asks for the step's compensator. It fails when the method's shape does not
+// fit the step, as bindHandlerSet would.
+func bindCreated(set handlerSet, step, kind string, combine, undo bool) (activityHandler, error) {
+	canon := canonicalName(step)
+	if undo {
+		if comp, ok := set.compensators[canon]; ok {
+			return compensationHandler(comp.fn), nil
+		}
+		return nil, nil
+	}
+	cand, ok := set.candidates[canon]
+	if !ok {
+		return nil, nil
+	}
+	switch {
+	case cand.item != nil:
+		return nil, fmt.Errorf("step %q of workflow %q is a created branch's step; handler %q must take "+
+			"the branch's context, not (base, item)", step, set.workflow, cand.name)
+	case combine && cand.raw == nil:
+		return nil, fmt.Errorf("step %q of workflow %q is a combine; handler %q must return the "+
+			"complete post-join context", step, set.workflow, cand.name)
+	case combine:
+		return combineHandler(cand.raw), nil
+	case cand.kind != kind:
+		return nil, fmt.Errorf("step %q of workflow %q is a %s but handler %q is a %s",
+			step, set.workflow, kind, cand.name, cand.kind)
+	}
+	return cand.handler, nil
 }
 
 func sortedCompKeys(m map[string]compCandidate) []string {

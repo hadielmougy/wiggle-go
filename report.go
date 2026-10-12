@@ -17,6 +17,7 @@ type StepReport struct {
 	StartedAt  int64
 	FinishedAt int64
 	Events     []EmittedEvent
+	Branches   []*CreatedBranch
 }
 
 // EmittedEvent is a domain event a handler emitted while its step ran.
@@ -82,6 +83,13 @@ func stepResult(s StepReport) (*pb.StepResult, error) {
 		}
 		r.Events = append(r.Events, &pb.EmittedEvent{Type: e.Type, Payload: payload})
 	}
+	for _, b := range s.Branches {
+		cb, err := createdBranch(b)
+		if err != nil {
+			return nil, err
+		}
+		r.Branches = append(r.Branches, cb)
+	}
 	switch {
 	case s.Predicate != nil:
 		r.Outcome = &pb.StepResult_PredicateValue{PredicateValue: *s.Predicate}
@@ -93,4 +101,45 @@ func stepResult(s StepReport) (*pb.StepResult, error) {
 		r.Outcome = &pb.StepResult_Merge{Merge: val}
 	}
 	return r, nil
+}
+
+func createdBranch(b *CreatedBranch) (*pb.CreatedBranch, error) {
+	input, err := toValue(b.input)
+	if err != nil {
+		return nil, fmt.Errorf("encode a branch's input: %w", err)
+	}
+	out := &pb.CreatedBranch{Input: input, Key: b.key}
+	for _, st := range b.steps {
+		out.Steps = append(out.Steps, branchStepProto(st))
+	}
+	return out, nil
+}
+
+func branchStepProto(st branchStep) *pb.BranchStep {
+	out := &pb.BranchStep{Name: st.name, Kind: st.kind, Compensable: st.compensable, Queue: st.queue,
+		SleepMillis: st.sleepMillis, Combine: st.combine, Workflow: st.workflow, LoopBudget: st.loopBudget}
+	if st.retry != nil {
+		out.Retry, _ = toValue(st.retry.toJSON())
+	}
+	for _, e := range st.escalation {
+		out.Escalation = append(out.Escalation, branchStepProto(e))
+	}
+	for _, arm := range st.arms {
+		pa := &pb.BranchArm{}
+		for _, a := range arm {
+			pa.Steps = append(pa.Steps, branchStepProto(a))
+		}
+		out.Arms = append(out.Arms, pa)
+	}
+	for _, b := range st.body {
+		out.Body = append(out.Body, branchStepProto(b))
+	}
+	for _, c := range st.cases {
+		pc := &pb.BranchCase{Guard: c.guard}
+		for _, cs := range c.steps {
+			pc.Steps = append(pc.Steps, branchStepProto(cs))
+		}
+		out.Cases = append(out.Cases, pc)
+	}
+	return out
 }

@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -71,6 +73,36 @@ type Graph struct {
 	Version      int    // 0 = a content-hash version
 	DefaultQueue string // "" = the workflow name
 	Steps        []Node
+	Attributes   []Attribute // values queue criteria can test (criteria.Attr)
+}
+
+// Attribute is a value the workflow declares for queue criteria to test: Path is a dotted path into
+// the context a step receives, read as Type -- STRING, LONG, DECIMAL or BOOLEAN. The server extracts
+// it each time a step becomes ready; a value that is missing or does not fit the type is absent.
+type Attribute struct {
+	Name string
+	Type string
+	Path string
+}
+
+// MaxAttributes is the most attributes one workflow declares.
+const MaxAttributes = 16
+
+var attributeName = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
+
+func (a Attribute) validate() error {
+	if !attributeName.MatchString(a.Name) {
+		return fmt.Errorf("attribute name %q must match %s", a.Name, attributeName)
+	}
+	switch a.Type {
+	case "STRING", "LONG", "DECIMAL", "BOOLEAN":
+	default:
+		return fmt.Errorf("attribute %q type must be STRING, LONG, DECIMAL or BOOLEAN, got %q", a.Name, a.Type)
+	}
+	if a.Path == "" || strings.Contains("."+a.Path+".", "..") {
+		return fmt.Errorf("attribute %q needs a dotted path, got %q", a.Name, a.Path)
+	}
+	return nil
 }
 
 // Node is one step in a workflow. The interface is sealed: only the types in this package
@@ -78,6 +110,11 @@ type Graph struct {
 type Node interface{ isNode() }
 
 // Step is a unit of work run on a worker; its handler returns the new context.
+//
+// Combine makes the step a spawning step: its handler may create branches (StepRun.Create), and the
+// combine step Combine (bound with Worker.HandleCombine) receives their results through
+// StepRun.Results and returns the post-join context. The combine always runs, with no results
+// when the step created nothing, and may itself create the next round.
 //
 // Compensate declares the step compensable: if the instance later fails, the engine runs the
 // step's compensator (bound with Worker.HandleCompensation or a Compensate<Step> method) in the
@@ -87,16 +124,19 @@ type Step struct {
 	Queue      string // "" = the default queue
 	Retry      Retry  // zero = default
 	Compensate bool   // declare an undo; a compensator MUST be bound for this step
+	Combine    string // a spawning step: the combine its created branches rejoin at
 }
 
 // Effect is a step run for its side effect only; the context is unchanged. (Topologically identical
 // to a Step -- the difference is only in the bound handler.) Compensate declares an undo exactly
-// as on a Step (for an effect the two snapshots are the same context).
+// as on a Step (for an effect the two snapshots are the same context). Combine makes it a
+// spawning step, as on a Step.
 type Effect struct {
 	Name       string
 	Queue      string
 	Retry      Retry
 	Compensate bool
+	Combine    string
 }
 
 // Gate continues only while its predicate holds; false ends the instance as gated:<name> (or, inside
@@ -297,6 +337,14 @@ func (g *graph) addForEachCombine(name, forEachName string) string {
 	return id
 }
 
+// addSpawnCombine emits the combine after a spawning step: a TASK bound by name whose collectKey
+// stages the results of the branches stepName created.
+func (g *graph) addSpawnCombine(name, stepName string) string {
+	id := g.addWorker("TASK", name, "", Retry{})
+	g.nodes[id]["collectKey"] = spawnScratchPrefix + stepName
+	return id
+}
+
 // isCombine reports whether a registered graph node is a fork or forEach combine: a TASK with
 // armNames or a collectKey, or -- in a graph written before those fields -- an itemsKey.
 func isCombine(node map[string]any) bool {
@@ -345,6 +393,20 @@ func (g *graph) setBranches(forkID string, starts []string) {
 
 type openEnd struct{ nodeID, edge string }
 
+// appendTask chains a task; with a combine it is a spawning step, followed by a dynamic join and
+// the combine collecting the branches it creates.
+func (b *builder) appendTask(name, queue string, retry Retry, compensate bool, combine string) {
+	id := b.g.addWorker("TASK", name, queue, retry)
+	if compensate {
+		b.g.nodes[id]["compensable"] = true
+	}
+	b.chain(id)
+	if combine != "" {
+		b.chain(b.g.addJoin(0))
+		b.chain(b.g.addSpawnCombine(combine, name))
+	}
+}
+
 type builder struct {
 	g             *graph
 	enclosingJoin string
@@ -392,17 +454,9 @@ func (b *builder) appendNodes(nodes []Node) {
 func (b *builder) appendNode(n Node) {
 	switch node := n.(type) {
 	case Step:
-		id := b.g.addWorker("TASK", node.Name, node.Queue, node.Retry)
-		if node.Compensate {
-			b.g.nodes[id]["compensable"] = true
-		}
-		b.chain(id)
+		b.appendTask(node.Name, node.Queue, node.Retry, node.Compensate, node.Combine)
 	case Effect:
-		id := b.g.addWorker("TASK", node.Name, node.Queue, node.Retry)
-		if node.Compensate {
-			b.g.nodes[id]["compensable"] = true
-		}
-		b.chain(id)
+		b.appendTask(node.Name, node.Queue, node.Retry, node.Compensate, node.Combine)
 	case Gate:
 		id := b.g.addWorker("PREDICATE", node.Name, node.Queue, node.Retry)
 		b.attach(id)
@@ -632,6 +686,24 @@ func (g Graph) Compile() (bp *FlowSpec, err error) {
 		"queues":        toAnySlice(queues),
 		"executionMode": "SERVER",
 	}
+	if len(g.Attributes) > MaxAttributes {
+		return nil, fmt.Errorf("a workflow declares at most %d attributes, got %d", MaxAttributes, len(g.Attributes))
+	}
+	if len(g.Attributes) > 0 {
+		attrs := make([]any, 0, len(g.Attributes))
+		seen := map[string]bool{}
+		for _, a := range g.Attributes {
+			if err := a.validate(); err != nil {
+				return nil, err
+			}
+			if seen[a.Name] {
+				return nil, fmt.Errorf("attribute %q is declared twice", a.Name)
+			}
+			seen[a.Name] = true
+			attrs = append(attrs, map[string]any{"name": a.Name, "type": a.Type, "path": a.Path})
+		}
+		def["attributes"] = attrs
+	}
 	version := g.Version
 	if version == 0 {
 		version = contentVersion(def)
@@ -660,6 +732,9 @@ func contentVersion(def map[string]any) int {
 		"startNode":     def["startNode"],
 		"nodes":         def["nodes"],
 		"executionMode": def["executionMode"],
+	}
+	if attrs, ok := def["attributes"]; ok {
+		material["attributes"] = attrs
 	}
 	b, _ := json.Marshal(material) // encoding/json sorts map keys -> deterministic
 	sum := sha256.Sum256(b)

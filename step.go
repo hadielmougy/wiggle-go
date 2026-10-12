@@ -12,8 +12,15 @@ type StepRun struct {
 	name       string
 	instanceID string
 
+	base       Context
+	hasBase    bool
+	results    any
+	hasResults bool
+	creates    bool
+
 	mu      sync.Mutex
 	emitted []EmittedEvent
+	created []*CreatedBranch
 }
 
 // StepActivity is an Activity that also receives the running StepRun.
@@ -45,12 +52,53 @@ func (s *StepRun) Emit(eventType string, payload map[string]any) error {
 	return nil
 }
 
-func (s *StepRun) drain() []EmittedEvent {
+// Create opens a branch over input -- its whole, isolated context -- to chain steps onto. Like Emit,
+// the branch is buffered and rides the step's report: it runs once the step completes, and an
+// attempt that fails leaves nothing behind. Its result reaches the combine after the step, through
+// StepRun.Results. Only a spawning step (Step{Combine: ...}), or its combine, may create branches;
+// anywhere else the step fails.
+func (s *StepRun) Create(input any) *CreatedBranch { return s.create("", false, input) }
+
+// CreateKeyed is Create with a key: the combine then receives a map by key. Either every branch of
+// one step has a key, or none does.
+func (s *StepRun) CreateKeyed(key string, input any) *CreatedBranch {
+	return s.create(key, true, input)
+}
+
+func (s *StepRun) create(key string, keyed bool, input any) *CreatedBranch {
+	b := &CreatedBranch{input: input, key: key, keyed: keyed}
+	if !s.creates {
+		b.fail(fmt.Errorf("step %q cannot create branches: only a step followed directly by a combine "+
+			"(Step{Combine: ...}), or that combine, may call Create", s.name))
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	out := s.emitted
-	s.emitted = nil
-	return out
+	s.created = append(s.created, b)
+	return b
+}
+
+// Base is the frozen base context, where one exists: inside a forEach item step the pre-forEach
+// context, inside a created branch's step what the creating step returned, and inside a combine the
+// context without the results it combines. ok is false anywhere else.
+func (s *StepRun) Base() (base Context, ok bool) { return s.base, s.hasBase }
+
+// Results is what a combine combines: for a spawning step's combine, the results of the branches
+// the step created -- a []any in creation order, or a map[string]any by key -- which reach it only
+// here; for a forEach's combine the collected results; for a fork's combine a map of each arm's
+// result by arm name. ok is false outside a combine.
+func (s *StepRun) Results() (results any, ok bool) { return s.results, s.hasResults }
+
+func (s *StepRun) drain() ([]EmittedEvent, []*CreatedBranch, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	events, created := s.emitted, s.created
+	s.emitted, s.created = nil, nil
+	for _, b := range created {
+		if b.err != nil {
+			return nil, nil, b.err
+		}
+	}
+	return events, created, nil
 }
 
 func newStep(t *Task) *StepRun {

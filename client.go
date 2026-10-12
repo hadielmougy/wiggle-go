@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hadielmougy/wiggle-go/criteria"
 	"github.com/hadielmougy/wiggle-go/internal/pb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -345,6 +346,24 @@ func (c *Client) Poll(ctx context.Context, workerID string, queues []string, max
 	for _, v := range versions {
 		req.Versions = append(req.Versions, &pb.WorkflowVersion{Workflow: v.Workflow, Version: v.Version})
 	}
+	return c.poll(ctx, req)
+}
+
+// PollCriteria leases up to max ready tasks, from each criteria's queue those its predicate holds
+// for. Non-empty versions claims only those (workflow, version) pairs' tasks.
+func (c *Client) PollCriteria(ctx context.Context, workerID string, cs []criteria.QueueCriteria, max int,
+	leaseMillis, waitMillis int64, versions ...WorkflowVersion) (*PollResult, error) {
+	req := &pb.PollRequest{WorkerId: workerID, Max: int32(max), LeaseMillis: leaseMillis, WaitMillis: waitMillis}
+	for _, v := range versions {
+		req.Versions = append(req.Versions, &pb.WorkflowVersion{Workflow: v.Workflow, Version: v.Version})
+	}
+	for _, qc := range cs {
+		req.Criteria = append(req.Criteria, criteriaProto(qc))
+	}
+	return c.poll(ctx, req)
+}
+
+func (c *Client) poll(ctx context.Context, req *pb.PollRequest) (*PollResult, error) {
 	res, err := c.rpc.PollTasks(ctx, req, callReady)
 	if err != nil {
 		return nil, err
@@ -386,4 +405,49 @@ func (c *Client) Heartbeat(ctx context.Context, taskID, leaseOwner string, exten
 		return 0, err
 	}
 	return res.GetLeaseExpiresAt(), nil
+}
+
+func criteriaProto(c criteria.QueueCriteria) *pb.QueueCriteria {
+	out := &pb.QueueCriteria{Queue: c.Queue}
+	if c.Where != nil {
+		out.Where = predicateProto(c.Where)
+	}
+	return out
+}
+
+func predicateProto(p criteria.Predicate) *pb.CriteriaPredicate {
+	switch x := p.(type) {
+	case criteria.Comparison:
+		cmp := &pb.CriteriaComparison{Field: x.Field.Name, Op: x.Op, Attribute: x.Field.Attribute}
+		for _, a := range x.Args {
+			l := &pb.CriteriaLiteral{}
+			switch v := a.(type) {
+			case bool:
+				l.V = &pb.CriteriaLiteral_Flag{Flag: v}
+			case int64:
+				l.V = &pb.CriteriaLiteral_Integer{Integer: v}
+			case criteria.Decimal:
+				l.V = &pb.CriteriaLiteral_Decimal{Decimal: string(v)}
+			case string:
+				l.V = &pb.CriteriaLiteral_Text{Text: v}
+			}
+			cmp.Args = append(cmp.Args, l)
+		}
+		return &pb.CriteriaPredicate{P: &pb.CriteriaPredicate_Cmp{Cmp: cmp}}
+	case criteria.AllOf:
+		return &pb.CriteriaPredicate{P: &pb.CriteriaPredicate_AllOf{AllOf: junctionProto(x.Terms)}}
+	case criteria.AnyOf:
+		return &pb.CriteriaPredicate{P: &pb.CriteriaPredicate_AnyOf{AnyOf: junctionProto(x.Terms)}}
+	case criteria.Negated:
+		return &pb.CriteriaPredicate{P: &pb.CriteriaPredicate_Negated{Negated: predicateProto(x.Term)}}
+	}
+	return &pb.CriteriaPredicate{}
+}
+
+func junctionProto(terms []criteria.Predicate) *pb.CriteriaJunction {
+	j := &pb.CriteriaJunction{}
+	for _, t := range terms {
+		j.Terms = append(j.Terms, predicateProto(t))
+	}
+	return j
 }

@@ -257,6 +257,71 @@ attempt that fails leaves none behind, and its retry emits again. Consumers read
 lifecycle (`wf.*`) events through `PollEvents` / `AckEvents`. The worker reports each step's start
 and finish times, which feed `StepStats`.
 
+## Branches created at run time
+
+A step declared with a `Combine` is a **spawning step**: its handler may open branches with
+`StepRun.Create(input)` (or `CreateKeyed(key, input)`), each running its own chain of steps on an
+isolated copy of `input`. The branches ride the step's report and commit with it. The combine
+receives their results through `StepRun.Results()`: a `[]any` in creation order, or a
+`map[string]any` by key.
+
+```go
+wf := wiggle.Graph{Name: "orders", Steps: []wiggle.Node{
+	wiggle.Step{Name: "fulfil", Combine: "summarise"}, wiggle.Step{Name: "notify"}}}.MustCompile()
+
+w := wiggle.NewWorker(client, "w1").
+	BranchSteps("orders", "reserve", "ship"). // in no graph: bound on first dispatch
+	HandleStep("orders", "fulfil", func(s *wiggle.StepRun, o wiggle.Context) (wiggle.Context, error) {
+		for _, item := range o["items"].([]any) {
+			s.Create(item).ThenApply("reserve").ThenApply("ship", wiggle.OnQueue("shipping"))
+		}
+		return o, nil
+	}).
+	Handle("orders", "reserve", reserve). // a HandleStep handler reads fulfil's return via s.Base()
+	Handle("orders", "ship", ship).
+	HandleCombineStep("orders", "summarise", func(s *wiggle.StepRun, o wiggle.Context) (wiggle.Context, error) {
+		shipped, _ := s.Results()
+		o["shipped"] = shipped
+		return o, nil
+	})
+```
+
+A `*CreatedBranch` offers `ThenApply`, `ThenAccept`, `ThenFilter` (a false gate ends the branch),
+`ThenSleep`, `ThenAwait(signal, timeout, escalation)`, `ThenSubFlow(node, workflow)`,
+`ThenAllOf(combine, arms...)`, `RepeatWhile(condition, maxIterations, body)` and
+`ThenOneOf(When(guard, chain)..., Otherwise(chain))`. Steps take `OnQueue`, `WithRetry` and
+`Compensable()` options; otherwise a step uses the creating step's queue and retry policy.
+`.Combine(name)` after a branch task makes that task spawn too, so branches nest. A combine may
+itself `Create`, which starts another round. A chain built wrongly, or `Create` outside a spawning
+step or its combine, fails the step without a retry.
+
+Branch-only steps are in no registered graph, so declare them with `Worker.BranchSteps`, or give a
+`RegisterHandlers` struct a `BranchSteps() []string` method. They are then bound by name the first
+time one is dispatched. A branch step on a queue no graph mentions runs only on a worker that polls
+that queue.
+
+## Queue criteria
+
+A worker can claim only some of a queue's tasks: a predicate over the task's workflow, version,
+step, node, kind, attempt, correlation id, creation time, or **attributes** the workflow declares
+from its context.
+
+```go
+wf := wiggle.Graph{Name: "orders", Steps: []wiggle.Node{wiggle.Step{Name: "charge", Queue: "payments"}},
+	Attributes: []wiggle.Attribute{{Name: "tier", Type: "STRING", Path: "customer.tier"}}}.MustCompile()
+
+gold, err := criteria.New("payments", criteria.And(
+	criteria.Equal(criteria.Attr("tier"), "gold"),
+	criteria.LessThan(criteria.Attempt, 3)))
+w := wiggle.NewWorker(client, "gold-1", wiggle.WithCriteria(gold)).Handle("orders", "charge", charge)
+```
+
+Package `criteria` (`github.com/hadielmougy/wiggle-go/criteria`) offers `Equal`, `NotEqual`, `In`,
+`LessThan(OrEqual)`, `GreaterThan(OrEqual)`, `Between`, `Like`, `IsNull` and `IsNotNull`, combined with
+`And`, `Or` and `Not`. A comparison on an absent value is false. `criteria.New` checks a predicate
+against the server's limits. `WithCriteria` replaces `Queues`. `Client.BacklogCoverage` shows ready
+work no live worker's criteria would claim.
+
 ## Testing
 
 ```bash
@@ -269,6 +334,4 @@ WIGGLE_TEST_URL=localhost:8080 go test -run Integration ./...   # end-to-end aga
 - **Numbers** arrive as `float64` (Go's `encoding/json` convention), so assert `o["qty"].(float64)`.
 - **Execution mode is SERVER only** (no local step chaining); interop with Java/Python workers is by
   activity name, so the Go content-hash version need not equal theirs.
-- **Not yet supported** (Java client only for now): branches created at run time (`Step.create`) and
-  queue criteria (polling with a predicate).
 - **Regenerating stubs:** `./codegen.sh` (needs `protoc` + `protoc-gen-go` + `protoc-gen-go-grpc`).
